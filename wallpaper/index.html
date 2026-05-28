@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fishy Live Wallpaper</title>
+    <!-- Google Fonts for ultra-premium typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: transparent; /* Allows transparency behind the canvas */
+        user-select: none;
+        -webkit-user-select: none;
+        font-family: 'Outfit', sans-serif;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        border: none !important; /* Force remove any borders */
+      }
+
+      /* ============================================================
+         PREMIUM GLASSMORPHIC SETTINGS UI
+         ============================================================ */
+      :root {
+        --text-main: #f1f5f9;
+        --text-muted: #cbd5e1;
+        --input-bg: rgba(255, 255, 255, 0.08);
+        --border-input: rgba(255, 255, 255, 0.15);
+      }
+
+      /* Settings Toggle Gear Button */
+      .settings-toggle {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10000;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        opacity: 0.25; /* Highly transparent by default so desktop stays clean */
+      }
+      .settings-toggle:hover, .settings-toggle.active {
+        opacity: 1;
+        background: rgba(15, 23, 42, 0.7);
+        transform: rotate(45deg);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+      }
+
+      /* Settings Panel Overlay */
+      .settings-panel {
+        position: absolute;
+        top: 80px;
+        right: 20px;
+        width: 310px;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+        background: rgba(15, 23, 42, 0.48); /* Premium slate-glass backdrop */
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        padding: 24px;
+        color: var(--text-main);
+        z-index: 9999;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        transform: translateX(120%);
+        opacity: 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+      }
+      .settings-panel.open {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      /* Inner Elements Style */
+      .settings-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 12px;
+      }
+      .settings-section {
+        margin-bottom: 24px;
+      }
+      .settings-section-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 14px;
+        opacity: 0.8;
+      }
+      .control-group {
+        margin-bottom: 18px;
+      }
+      .control-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.88rem;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+      .control-value {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+      }
+
+      /* Premium Sliders */
+      .range-slider {
+        width: 100%;
+        -webkit-appearance: none;
+        background: var(--input-bg);
+        height: 6px;
+        border-radius: 3px;
+        outline: none;
+        border: 1px solid var(--border-input);
+      }
+      .range-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #f0654e;
+        cursor: pointer;
+        transition: transform 0.1s ease;
+        box-shadow: 0 0 10px rgba(240, 101, 78, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      .range-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.25);
+      }
+
+      /* Preset Color Dots */
+      .color-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .color-preset {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+      }
+      .color-preset:hover {
+        transform: scale(1.18);
+      }
+      .color-preset.active {
+        border-color: #ffffff;
+        transform: scale(1.1);
+        box-shadow: 0 0 0 2px rgba(240, 101, 78, 0.8), 0 3px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      /* Custom Color input */
+      .custom-color-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.85rem;
+      }
+      .custom-color-picker {
+        -webkit-appearance: none;
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        cursor: pointer;
+        background: none;
+      }
+      .custom-color-picker::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+      .custom-color-picker::-webkit-color-swatch {
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      }
+
+      /* Switch (Toggle) Row */
+      .switch-group {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .switch-label {
+        font-size: 0.88rem;
+        font-weight: 500;
+      }
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--input-bg);
+        border: 1px solid var(--border-input);
+        transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 24px;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: #ffffff;
+        transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 50%;
+      }
+      input:checked + .slider {
+        background-color: #f0654e;
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+      input:checked + .slider:before {
+        transform: translateX(20px);
+      }
+
+      .shortcut-info {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 12px;
+        margin-top: 16px;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Gear Toggle Button -->
+    <div class="settings-toggle" id="settings-toggle-btn" title="Settings (Press S)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </div>
+
+    <!-- Glassmorphic Settings Panel -->
+    <div class="settings-panel" id="settings-panel">
+      <div class="settings-title">
+        <span>Wallpaper Settings</span>
+      </div>
+
+      <!-- FISH CUSTOMIZATION -->
+      <div class="settings-section">
+        <div class="settings-section-title">Fish Customization</div>
+        
+        <!-- Fish Size -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Fish Size</span>
+            <span class="control-value" id="fish-size-value">12px</span>
+          </div>
+          <input type="range" id="fish-size-slider" class="range-slider" min="12" max="52" value="12" />
+        </div>
+
+        <!-- Fish Count -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Fish Count</span>
+            <span class="control-value" id="fish-count-value">2</span>
+          </div>
+          <input type="range" id="fish-count-slider" class="range-slider" min="1" max="15" value="2" />
+        </div>
+
+        <!-- Fish Color Presets -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Fish Color</span>
+          </div>
+          <div class="color-presets" id="fish-color-presets">
+            <!-- Coral Orange (Default) -->
+            <div class="color-preset active" data-color="#f0654e" style="background-color: #f0654e;"></div>
+            <!-- Gold/Yellow -->
+            <div class="color-preset" data-color="#ffb347" style="background-color: #ffb347;"></div>
+            <!-- Electric Blue -->
+            <div class="color-preset" data-color="#3b82f6" style="background-color: #3b82f6;"></div>
+            <!-- Lime Green -->
+            <div class="color-preset" data-color="#10b981" style="background-color: #10b981;"></div>
+            <!-- Pure White -->
+            <div class="color-preset" data-color="#f8fafc" style="background-color: #f8fafc; border: 1px solid rgba(255,255,255,0.2);"></div>
+            <!-- Pink Pearl -->
+            <div class="color-preset" data-color="#ec4899" style="background-color: #ec4899;"></div>
+          </div>
+          <!-- Custom Color Picker -->
+          <div class="custom-color-wrapper">
+            <input type="color" id="fish-color-picker" class="custom-color-picker" value="#f0654e" />
+            <span>Custom Color</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BACKGROUND CUSTOMIZATION -->
+      <div class="settings-section">
+        <div class="settings-section-title">Background Layer</div>
+
+        <!-- Opacity Slider -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Background Opacity</span>
+            <span class="control-value" id="bg-opacity-value">50%</span>
+          </div>
+          <input type="range" id="bg-opacity-slider" class="range-slider" min="0" max="100" value="50" />
+        </div>
+
+        <!-- Background color controls (always visible for tinting) -->
+        <div class="control-group" id="bg-color-group">
+          <div class="control-label">
+            <span>Background Color</span>
+          </div>
+          <div class="color-presets" id="bg-color-presets">
+            <!-- Ocean Dark Blue -->
+            <div class="color-preset active" data-color="#07111e" style="background-color: #07111e;"></div>
+            <!-- Elegant Charcoal -->
+            <div class="color-preset" data-color="#18181b" style="background-color: #18181b;"></div>
+            <!-- Clean White -->
+            <div class="color-preset" data-color="#ffffff" style="background-color: #ffffff; border: 1px solid rgba(0,0,0,0.15);"></div>
+            <!-- Sage Green -->
+            <div class="color-preset" data-color="#2d3732" style="background-color: #2d3732;"></div>
+          </div>
+          <div class="custom-color-wrapper">
+            <input type="color" id="bg-color-picker" class="custom-color-picker" value="#07111e" />
+            <span>Custom Color</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SYSTEM SETTINGS -->
+      <div class="settings-section">
+        <div class="settings-section-title">System Settings</div>
+
+        <!-- Autostart Toggle -->
+        <div class="switch-group">
+          <span class="switch-label">Start at Login</span>
+          <label class="switch">
+            <input type="checkbox" id="system-autostart-toggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Shortcuts / Info -->
+      <div class="shortcut-info">
+        <div>• <strong>Cmd+Alt+S</strong> (Mac) / <strong>Ctrl+Alt+S</strong> (Win) — Toggle Settings/Interactive Mode</div>
+        <div>• <strong>Esc</strong> — Close wallpaper app</div>
+        <div>• <strong>Click (while settings open)</strong> — Feed the fish</div>
+      </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+    <script type="module" src="fish/main.js"></script>
+  </body>
+</html>
