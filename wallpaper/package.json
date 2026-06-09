@@ -1,12 +1,15 @@
 {
   "name": "fishy-wallpaper",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Interactive Live Fish Wallpaper for Windows and macOS",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "generate-icon": "electron generate-icon.js"
   },
   "devDependencies": {
     "electron": "^28.3.3",

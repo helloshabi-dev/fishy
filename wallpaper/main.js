@@ -63,6 +63,10 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.on('quit-app', () => {
+    app.quit();
+  });
+
   // Register IPC channel to configure application autostart on login dynamically
   ipcMain.on('set-autostart', (event, enabled) => {
     if (app.isPackaged) {
@@ -91,10 +95,6 @@ app.whenReady().then(() => {
     }
   });
 
-  // Register an 'Escape' key shortcut to easily close the wallpaper during testing/use
-  globalShortcut.register('Escape', () => {
-    app.quit();
-  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -273,6 +273,103 @@
         margin-top: 16px;
         opacity: 0.8;
       }
+
+      /* Per-Fish List */
+      .fish-list {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .fish-list-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: background 0.2s;
+        position: relative;
+      }
+      .fish-list-item:hover { background: rgba(255, 255, 255, 0.09); }
+      .fish-color-swatch {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        flex-shrink: 0;
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      }
+      .fish-color-swatch:hover { transform: scale(1.22); }
+      .fish-list-label {
+        font-size: 0.85rem;
+        font-weight: 500;
+        flex: 1;
+        color: var(--text-main);
+      }
+      .fish-color-input-hidden {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+      }
+      .fish-size-control {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+      .fish-size-slider {
+        width: 62px;
+        -webkit-appearance: none;
+        background: rgba(255, 255, 255, 0.1);
+        height: 4px;
+        border-radius: 2px;
+        outline: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .fish-size-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #f0654e;
+        cursor: pointer;
+        box-shadow: 0 0 5px rgba(240, 101, 78, 0.45);
+        transition: transform 0.1s;
+      }
+      .fish-size-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+      .fish-size-val {
+        font-size: 0.70rem;
+        color: var(--text-muted);
+        min-width: 26px;
+        text-align: right;
+      }
+
+      .quit-btn {
+        width: 100%;
+        margin-top: 4px;
+        padding: 10px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-main);
+        font-family: inherit;
+        font-size: 0.88rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s, color 0.2s;
+      }
+      .quit-btn:hover {
+        background: rgba(239, 68, 68, 0.18);
+        border-color: rgba(239, 68, 68, 0.35);
+        color: #fecaca;
+      }
+
     </style>
   </head>
   <body>
@@ -339,6 +436,14 @@
         </div>
       </div>
 
+      <!-- INDIVIDUAL FISH COLORS -->
+      <div class="settings-section">
+        <div class="settings-section-title">Individual Fish</div>
+        <div id="fish-list" class="fish-list">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </div>
+
       <!-- BACKGROUND CUSTOMIZATION -->
       <div class="settings-section">
         <div class="settings-section-title">Background Layer</div>
@@ -386,12 +491,13 @@
             <span class="slider"></span>
           </label>
         </div>
+
+        <button type="button" class="quit-btn" id="quit-app-btn">Quit Wallpaper</button>
       </div>
 
       <!-- Shortcuts / Info -->
       <div class="shortcut-info">
         <div>• <strong>Cmd+Alt+S</strong> (Mac) / <strong>Ctrl+Alt+S</strong> (Win) — Toggle Settings/Interactive Mode</div>
-        <div>• <strong>Esc</strong> — Close wallpaper app</div>
         <div>• <strong>Click (while settings open)</strong> — Feed the fish</div>
       </div>
     </div>

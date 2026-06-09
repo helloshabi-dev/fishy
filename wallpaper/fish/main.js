@@ -4,6 +4,7 @@ import { Ripple } from './ripple.js';
 import { Fish } from './fish.js';
 import { resolveCollisions, checkFeeding } from './physics.js';
 
+
 // ============================================================
 // CANVAS SETUP
 // ============================================================
@@ -21,7 +22,8 @@ const settings = {
   fishColor: localStorage.getItem("fishy_fishColor") || "#f0654e",
   bgOpacity: parseInt(localStorage.getItem("fishy_bgOpacity") || "50"), // default background opacity is 50%
   bgColor: localStorage.getItem("fishy_bgColor") || "#07111e",
-  autoStart: localStorage.getItem("fishy_autoStart") !== "false" // default is true (autostart enabled)
+  autoStart: localStorage.getItem("fishy_autoStart") !== "false", // default is true (autostart enabled)
+  fishProfiles: JSON.parse(localStorage.getItem('fishy_fishProfiles') || '[]')
 };
 
 // Utility to convert hex colors to RGBA with dynamic opacity
@@ -36,6 +38,94 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
   return `rgba(0, 0, 0, ${alpha})`;
+}
+
+// Returns (or creates) the persistent per-fish profile at index idx.
+// New profiles default to the current global color + size settings.
+function getOrCreateProfile(idx) {
+  while (settings.fishProfiles.length <= idx) {
+    settings.fishProfiles.push({ color: settings.fishColor, size: settings.fishSize });
+  }
+  return settings.fishProfiles[idx];
+}
+
+function saveFishProfiles() {
+  localStorage.setItem('fishy_fishProfiles', JSON.stringify(settings.fishProfiles));
+}
+
+// Renders the per-fish color + size controls in the settings panel
+function renderFishList() {
+  const container = document.getElementById('fish-list');
+  if (!container) return;
+  container.innerHTML = '';
+  fishes.forEach((fish, i) => {
+    const profile = getOrCreateProfile(i);
+    const profileSize = profile.size != null ? profile.size : settings.fishSize;
+
+    const item = document.createElement('div');
+    item.className = 'fish-list-item';
+
+    // Color swatch — clicking opens a native color picker
+    const swatch = document.createElement('div');
+    swatch.className = 'fish-color-swatch';
+    swatch.style.backgroundColor = profile.color;
+    swatch.title = 'Click to change color';
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'fish-color-input-hidden';
+    colorInput.value = profile.color;
+
+    swatch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      colorInput.click();
+    });
+    colorInput.addEventListener('input', (e) => {
+      e.stopPropagation();
+      const newColor = e.target.value;
+      profile.color = newColor;
+      swatch.style.backgroundColor = newColor;
+      if (fishes[i]) fishes[i].updateColor(newColor);
+      saveFishProfiles();
+    });
+
+    const label = document.createElement('span');
+    label.className = 'fish-list-label';
+    label.textContent = `Fish ${i + 1}`;
+
+    // Per-fish size slider
+    const sizeControl = document.createElement('div');
+    sizeControl.className = 'fish-size-control';
+
+    const sizeSliderEl = document.createElement('input');
+    sizeSliderEl.type = 'range';
+    sizeSliderEl.className = 'fish-size-slider';
+    sizeSliderEl.min = 12;
+    sizeSliderEl.max = 52;
+    sizeSliderEl.value = profileSize;
+
+    const sizeValEl = document.createElement('span');
+    sizeValEl.className = 'fish-size-val';
+    sizeValEl.textContent = profileSize + 'px';
+
+    sizeSliderEl.addEventListener('input', (e) => {
+      e.stopPropagation();
+      const newSize = parseInt(e.target.value);
+      profile.size = newSize;
+      sizeValEl.textContent = newSize + 'px';
+      if (fishes[i]) fishes[i].radius = newSize;
+      saveFishProfiles();
+    });
+
+    sizeControl.appendChild(sizeSliderEl);
+    sizeControl.appendChild(sizeValEl);
+
+    item.appendChild(swatch);
+    item.appendChild(colorInput);
+    item.appendChild(label);
+    item.appendChild(sizeControl);
+    container.appendChild(item);
+  });
 }
 
 // Initialize settings panel controls to match the persisted settings
@@ -132,11 +222,14 @@ function adjustFishCount(targetCount) {
         attempts++;
       }
 
-      fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor));
+      const newIdx = fishes.length;
+      const newProfile = getOrCreateProfile(newIdx);
+      fishes.push(new Fish(x, y, vx, vy, newProfile.size || settings.fishSize, newProfile.color));
     }
   } else if (fishes.length > targetCount) {
     fishes.splice(targetCount);
   }
+  renderFishList();
 }
 
 // Setup Settings UI Listeners
@@ -168,17 +261,18 @@ function initSettingsUI() {
     e.stopPropagation();
   });
 
-  // Size Slider listener
+  // Size Slider listener — sets global default AND updates all individual fish + profiles
   sizeSlider.addEventListener("input", (e) => {
     const size = parseInt(e.target.value);
     settings.fishSize = size;
     sizeVal.textContent = size + "px";
     localStorage.setItem("fishy_fishSize", size);
-    
-    // Dynamically scale radius of all active fishes immediately!
-    fishes.forEach(fish => {
+    fishes.forEach((fish, i) => {
+      getOrCreateProfile(i).size = size;
       fish.radius = size;
     });
+    saveFishProfiles();
+    renderFishList();
   });
 
   // Fish Count slider listener
@@ -218,10 +312,13 @@ function initSettingsUI() {
       }
     });
 
-    // Update active fishes immediately!
-    fishes.forEach(fish => {
+    // Update all fish and their individual profiles
+    fishes.forEach((fish, i) => {
+      getOrCreateProfile(i).color = color;
       fish.updateColor(color);
     });
+    saveFishProfiles();
+    renderFishList();
   }
 
   // Opacity Slider listener
@@ -328,6 +425,16 @@ function initSettingsUI() {
         window.electronAPI.setIgnoreMouseEvents(true);
       }
     };
+  }
+
+  const quitBtn = document.getElementById("quit-app-btn");
+  if (quitBtn) {
+    quitBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (window.electronAPI && window.electronAPI.quitApp) {
+        window.electronAPI.quitApp();
+      }
+    });
   }
 
   // System Autostart Toggle Listener
@@ -464,8 +571,10 @@ function init() {
       attempts++;
     }
 
-    fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor));
+    fishes.push(new Fish(x, y, vx, vy, settings.fishSize, getOrCreateProfile(i).color));
   }
+  saveFishProfiles();
+  renderFishList();
 }
 
 // ============================================================

@@ -21,8 +21,6 @@ First, make sure you have [Node.js](https://nodejs.org/) installed.
    npm start
    ```
 
-*💡 **Tip:** Press `Escape` (Esc) on your keyboard at any time to immediately close the live wallpaper application.*
-
 ---
 
 ## 🛠️ How to Package & Share with Friends
@@ -68,3 +66,15 @@ By default, the wallpaper uses the minimalist white background from your web pro
    ```javascript
    ctx.fillStyle = "#07111e";
    ```
+
+---
+
+## 🎨 Application Icon
+
+The application icon is dynamically generated using the exact same vector fish graphics drawing code from the application!
+
+To generate or rebuild the app icon:
+```bash
+npm run generate-icon
+```
+This runs a headless Electron process to render the fish canvas to `build/icon.png`, which is automatically detected and packaged by `electron-builder` during builds.

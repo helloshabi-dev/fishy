@@ -1,5 +1,5 @@
 // Fish Class — Realistic Top View with Sine-wave wiggling spine and fin tucking/flaring
-import { randomRange, normalizeAngle } from './utils.js';
+import { randomRange, normalizeAngle } from "./utils.js";
 
 export class Fish {
   constructor(x, y, vx, vy, radius, color = "#f0654e") {
@@ -11,7 +11,7 @@ export class Fish {
     this.ay = 0;
     this.radius = radius;
 
-    this.baseMaxSpeed = randomRange(0.4, 2.2); // Extremely wide speed spectrum for strong individual personality!
+    this.baseMaxSpeed = randomRange(1.5, 2.2); // Calmer speeds suited for a desktop wallpaper
 
     // Movement states - each fish gets a random initial state and timer for individuality
     // Koi are highly active; we make them spawn in active swimming states most of the time
@@ -24,7 +24,7 @@ export class Fish {
     } else if (initRoll < 0.85) {
       this.state = "swimming";
       this.stateTimer = Math.floor(randomRange(30, 300)); // Varied initial cruise durations
-      this.targetSpeed = this.baseMaxSpeed * randomRange(0.4, 1.45); // Diverse initial cruise speeds
+      this.targetSpeed = this.baseMaxSpeed * randomRange(0.3, 1.0); // Diverse initial cruise speeds
       this.currentSpeed = this.targetSpeed;
     } else {
       this.state = "prepping";
@@ -47,18 +47,20 @@ export class Fish {
     this.eatCooldown = 0;
     this.currentFlare = 0.18;
     this.smoothAmpFactor = 0.04; // Smoothed amplitude — lerps toward computed target each frame to prevent abrupt wiggle snaps
-    this.kickAmp = 0;   // Bilateral launch kick amplitude (decaying burst at start of movement)
+    this.kickAmp = 0; // Bilateral launch kick amplitude (decaying burst at start of movement)
     this.kickPhase = 0; // Phase of the kick oscillation
+    this.snatchTimer = 0; // Timer for snatching animation on eating food
 
-    // Joint angles for fluid serpentine skeleton follow (2 tail segments + 4 fan joints)
+    // Joint angles for fluid serpentine skeleton follow (3 tail segments + 4 fan joints)
     this.angle1 = this.drawAngle;
     this.angle2 = this.drawAngle;
-    this.angle3 = this.drawAngle; // Lobe joint 1
-    this.angle4 = this.drawAngle; // Lobe joint 2
-    this.angle5 = this.drawAngle; // Lobe joint 3
-    this.angle6 = this.drawAngle; // Lobe joint 4 (tip)
+    this.angle2b = this.drawAngle;
+    this.angle3 = this.drawAngle + Math.PI; // Lobe joint 1 (pointing backward)
+    this.angle4 = this.drawAngle + Math.PI; // Lobe joint 2
+    this.angle5 = this.drawAngle + Math.PI; // Lobe joint 3
+    this.angle6 = this.drawAngle + Math.PI; // Lobe joint 4 (tip)
     this.smoothTailDev = 0; // kept for backward compat, unused
-    this.tailWorldAngle = this.drawAngle; // World-space geometric angle of the tail tip (including wiggle)
+    this.tailWorldAngle = this.drawAngle + Math.PI; // World-space geometric angle of the tail tip (including wiggle)
 
     // Bioluminescent marine color theme - Now solid Coral Koi (matching the uploaded image)
     this.color1 = color;
@@ -91,6 +93,8 @@ export class Fish {
     // Speed Ratio to control tail wiggle speed and amplitude
     const speedRatio = Math.min(1.0, this.currentSpeed / this.baseMaxSpeed);
     const turnRatio = Math.min(1.0, this.smoothTurnRate / 0.025); // Lower divisor makes fin flapping extremely active on turns
+    // Turning fish glide — suppress tail wiggle proportional to turn sharpness
+    const turnSuppression = Math.max(0.05, 1.0 - turnRatio);
 
     // Dynamic body curve amplitude factor based on movement state
     let targetAmpFactor = 0.04;
@@ -98,9 +102,11 @@ export class Fish {
       const speedDiff = Math.max(0, this.targetSpeed - this.currentSpeed);
       // speedDiff * 2.8 creates a strong initial butt-wiggle burst that naturally
       // dampens to a subtle cruise sway as the fish reaches target speed.
-      targetAmpFactor = Math.min(1.6, 0.05 + speedRatio * 0.22 + speedDiff * 2.8);
+      targetAmpFactor =
+        Math.min(1.6, 0.05 + speedRatio * 0.22 + speedDiff * 2.8) *
+        turnSuppression;
     } else if (this.state === "prepping") {
-      targetAmpFactor = 0.15; // Dynamic tail tension loading during wind-up prepping
+      targetAmpFactor = 0.15 * turnSuppression; // Dynamic tail tension loading during wind-up prepping
     } else {
       // idle: relaxed breathing/water drift
       targetAmpFactor = 0.04;
@@ -108,50 +114,94 @@ export class Fish {
 
     // Smooth ampFactor: ramps up quickly at start of burst, decays slowly for a natural fade
     const ampLerpRate = targetAmpFactor > this.smoothAmpFactor ? 0.12 : 0.06;
-    this.smoothAmpFactor += (targetAmpFactor - this.smoothAmpFactor) * ampLerpRate;
+    this.smoothAmpFactor +=
+      (targetAmpFactor - this.smoothAmpFactor) * ampLerpRate;
     const ampFactor = this.smoothAmpFactor;
 
     // Head size & coordinates
     const headR = this.radius * 0.58; // Very bold head circle radius to match the muscular Koi profile
-    const headX = this.radius * 0.40; // Center of head circle
+    const headX = this.radius * 0.4; // Center of head circle
     // Traveling wave: originates at the TAIL (leads phase), propagates forward through body to head (lags).
     // Phase sequence: tail tip (+0.4) → mid-body (-0.3) → head (-1.2)
 
-    // Calculate 3 interconnected tail segment positions along spine using joint angles
-    const localA1 = this.angle1 - this.drawAngle;
-    const localA2 = this.angle2 - this.drawAngle;
+    // Calculate 4 interconnected tail segment positions along spine using joint angles
+    // Incorporate the wiggle directly into the joint angles to prevent tail stretching!
+    // Kick propagates through the whole spine (C-bend) with amplitude tapering toward the head
+    const kickSpeedFactor = Math.min(
+      1.0,
+      this.currentSpeed / Math.max(0.01, this.baseMaxSpeed * 0.2),
+    );
+    const kickVisual =
+      Math.sin(this.kickPhase) *
+      this.kickAmp *
+      kickSpeedFactor *
+      turnSuppression;
+    const wAngle1 =
+      this.angle1 +
+      Math.sin(this.wiggleCycle - 0.3) * (0.18 * ampFactor) +
+      kickVisual * 0.22;
+    const wAngle2 =
+      this.angle2 +
+      Math.sin(this.wiggleCycle + 0.1) * (0.38 * ampFactor) +
+      kickVisual * 0.38;
+    const wAngle2b =
+      this.angle2b +
+      Math.sin(this.wiggleCycle + 0.5) * (0.45 * ampFactor) +
+      kickVisual * 0.55;
 
-    const x1 = -this.radius * 0.85 * Math.cos(localA1);
-    const y1 = -this.radius * 0.85 * Math.sin(localA1)
-             + Math.sin(this.wiggleCycle - 0.3) * (this.radius * 0.19 * ampFactor); // Mid-body: follows tail wave
+    const localA1 = wAngle1 - this.drawAngle;
+    const localA2 = wAngle2 - this.drawAngle;
+    const localA2b = wAngle2b - this.drawAngle;
 
-    const x2 = x1 - this.radius * 0.52 * Math.cos(localA2);
-    const y2 = y1 - this.radius * 0.52 * Math.sin(localA2)
-             + Math.sin(this.wiggleCycle + 0.4) * (this.radius * 0.30 * ampFactor)  // Normal sine wave
-             + Math.sin(this.kickPhase) * (this.radius * 0.38 * this.kickAmp);      // Bilateral launch kick (decays)
+    const x1 = -this.radius * 0.6 * Math.cos(localA1);
+    const y1 = -this.radius * 0.6 * Math.sin(localA1);
 
-    // Head lags behind the body wave — it's dragged by the spine but steers back on course
-    const headY = Math.sin(this.wiggleCycle - 1.2) * (this.radius * 0.22 * ampFactor);
+    const x2 = x1 - this.radius * 0.38 * Math.cos(localA2);
+    const y2 = y1 - this.radius * 0.38 * Math.sin(localA2);
 
-    // Radii of the two tail segments (tapering down very robustly to maintain block width)
+    const x3 = x2 - this.radius * 0.28 * Math.cos(localA2b);
+    const y3 = y2 - this.radius * 0.28 * Math.sin(localA2b);
+
+    // Head lags behind the body wave — dragged by spine, also picks up a small kick sway
+    const headY =
+      Math.sin(this.wiggleCycle - 1.2) * (this.radius * 0.22 * ampFactor) +
+      kickVisual * this.radius * 0.07;
+
+    // Radii of the three tail segments (tapering down very robustly to maintain block width)
     const r1 = headR * 0.88; // Broad muscular trunk base
-    const r2 = headR * 0.62; // Substantial, broad tail tip
+    const r2 = headR * 0.68; // Mid-tail width
+    const r3 = headR * 0.52; // Substantial, broad tail tip
 
-    // Calculate angle of tail fan based on segment 2 relative to segment 1
-    const tailAngle = Math.atan2(y2 - y1, x2 - x1);
+    // Calculate angle of tail fan based on segment 3 relative to segment 2
+    const tailAngle = Math.atan2(y3 - y2, x3 - x2);
 
     // Store the true world-space geometric angle of the tail tip so update() can
     // use it as the root of the fan's kinematic chain next frame.
     this.tailWorldAngle = normalizeAngle(this.drawAngle + tailAngle);
 
     // Pectoral Fin — attach organically to the broad body block
-    const finFlutter = Math.sin(this.wiggleCycle * 4.6) * 0.65 * turnRatio; // Energetic steering flutter
+    const finFlutter =
+      Math.sin(this.wiggleCycle * 3.8) * (0.42 * speedRatio + 0.48 * turnRatio); // Active flapping while moving + steering flutter
     const finYOffset = headY * 0.65 + y1 * 0.35;
 
     // Draw layers (fins underneath, then body, then tail fan on top)
     this._drawFins(ctx, finYOffset, finFlutter, headR);
-    this._drawBody(ctx, headX, headY, headR, x1, y1, r1, x2, y2, r2);
-    this._drawTailFan(ctx, x2, y2, tailAngle, r2);
+    this._drawBody(
+      ctx,
+      headX,
+      headY,
+      headR,
+      x1,
+      y1,
+      r1,
+      x2,
+      y2,
+      r2,
+      x3,
+      y3,
+      r3,
+    );
+    this._drawTailFan(ctx, x3, y3, tailAngle, r3);
 
     ctx.restore();
   }
@@ -164,8 +214,18 @@ export class Fish {
     ctx.rotate(-(this.finAngle + finFlutter));
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(this.radius * 0.1, -this.radius * 0.45, -this.radius * 0.3, -this.radius * 0.45);
-    ctx.quadraticCurveTo(-this.radius * 0.4, -this.radius * 0.2, -this.radius * 0.2, 0);
+    ctx.quadraticCurveTo(
+      this.radius * 0.1,
+      -this.radius * 0.45,
+      -this.radius * 0.3,
+      -this.radius * 0.45,
+    );
+    ctx.quadraticCurveTo(
+      -this.radius * 0.4,
+      -this.radius * 0.2,
+      -this.radius * 0.2,
+      0,
+    );
     ctx.closePath();
     ctx.fillStyle = this.finColor;
     ctx.fill();
@@ -177,16 +237,26 @@ export class Fish {
     ctx.rotate(this.finAngle + finFlutter);
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(this.radius * 0.1, this.radius * 0.45, -this.radius * 0.3, this.radius * 0.45);
-    ctx.quadraticCurveTo(-this.radius * 0.4, this.radius * 0.2, -this.radius * 0.2, 0);
+    ctx.quadraticCurveTo(
+      this.radius * 0.1,
+      this.radius * 0.45,
+      -this.radius * 0.3,
+      this.radius * 0.45,
+    );
+    ctx.quadraticCurveTo(
+      -this.radius * 0.4,
+      this.radius * 0.2,
+      -this.radius * 0.2,
+      0,
+    );
     ctx.closePath();
     ctx.fillStyle = this.finColor;
     ctx.fill();
     ctx.restore();
   }
 
-  // Draws the main body block, head circle, and tapered tail connector
-  _drawBody(ctx, headX, headY, headR, x1, y1, r1, x2, y2, r2) {
+  // Draws the main body block, head circle, and tapered tail connectors
+  _drawBody(ctx, headX, headY, headR, x1, y1, r1, x2, y2, r2, x3, y3, r3) {
     // 3. Body — broad, square curved rectangle joining head and tail
     ctx.beginPath();
     ctx.moveTo(headX, headY - headR);
@@ -232,23 +302,56 @@ export class Fish {
     ctx.fillStyle = this.color1;
     ctx.fill();
 
-    // Segment 2 circle is omitted to let the tail fan's starting cap render directly on top
+    // 6. Tapered tail connector between segment 2 and segment 3
+    const angle23 = Math.atan2(y3 - y2, x3 - x2);
+    const perp23 = angle23 + Math.PI / 2;
+
+    const x2_top_c2 = x2 + Math.cos(perp23) * r2;
+    const y2_top_c2 = y2 + Math.sin(perp23) * r2;
+    const x2_bot_c2 = x2 - Math.cos(perp23) * r2;
+    const y2_bot_c2 = y2 - Math.sin(perp23) * r2;
+    const x3_top = x3 + Math.cos(perp23) * r3;
+    const y3_top = y3 + Math.sin(perp23) * r3;
+    const x3_bot = x3 - Math.cos(perp23) * r3;
+    const y3_bot = y3 - Math.sin(perp23) * r3;
+
+    ctx.beginPath();
+    ctx.moveTo(x2_top_c2, y2_top_c2);
+    ctx.lineTo(x3_top, y3_top);
+    ctx.lineTo(x3_bot, y3_bot);
+    ctx.lineTo(x2_bot_c2, y2_bot_c2);
+    ctx.closePath();
+    ctx.fillStyle = this.color1;
+    ctx.fill();
+
+    // Joint overlap circle for Segment 2
+    ctx.beginPath();
+    ctx.arc(x2, y2, r2, 0, Math.PI * 2);
+    ctx.fillStyle = this.color1;
+    ctx.fill();
+
+    // Segment 3 circle is omitted to let the tail fan's starting cap render directly on top
     // with zero double-transparency ghosting!
   }
 
   // Draws the 3-lobe tail fan with 5-segment kinematic chain per lobe
-  _drawTailFan(ctx, x2, y2, tailAngle, r2) {
+  _drawTailFan(ctx, x3, y3, tailAngle, r3) {
     const flare = this.currentFlare;
 
     const fanL = this.radius * 1.35; // Base length of ovals
     const fanW = this.radius * 0.55; // Wider lobes
 
     // Sub-segment dimensions for 5-segmented lobes — smooth taper from base to tip
-    const subL1 = fanL * 0.16; const subW1 = fanW * 0.50; // Segment A — short rigid base
-    const subL2 = fanL * 0.19; const subW2 = fanW * 0.70;
-    const subL3 = fanL * 0.22; const subW3 = fanW * 0.92;
-    const subL4 = fanL * 0.22; const subW4 = fanW * 1.15;
-    const subL5 = fanL * 0.28; const subW5 = fanW * 1.45; // Wide flaring tip
+    const subL1 = fanL * 0.16;
+    const subW1 = fanW * 0.5; // Segment A — short rigid base
+    const subL2 = fanL * 0.19;
+    const subW2 = fanW * 0.7;
+    const subL3 = fanL * 0.22;
+    const subW3 = fanW * 0.92;
+    const subL4 = fanL * 0.22;
+    const subW4 = fanW * 1.15;
+    const subL5 = fanL * 0.28;
+    const subW5 = fanW * 1.45; // Wide flaring tip
 
     // Helper: tapered connector polygon + rounded cap at the end
     const drawTaperedSegment = (L, wStart, wEnd) => {
@@ -286,10 +389,10 @@ export class Fish {
     // between consecutive chain angles — pure follow-through kinematics.
     const drawLobe = (baseAngle) => {
       ctx.save();
-      ctx.translate(x2, y2);
+      ctx.translate(x3, y3);
       ctx.rotate(baseAngle);
 
-      const w0 = r2 * 1.8;
+      const w0 = r3 * 2.0;
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       const half = Math.PI / 2;
 
@@ -335,22 +438,44 @@ export class Fish {
     drawLobe(tailAngle + flare);
   }
 
+  triggerSnatch() {
+    this.snatchTimer = 20; // 20 frames of snatching motion
+    // Sudden forward velocity surge
+    const surgeSpeed = this.baseMaxSpeed * 3.5;
+    this.currentSpeed = surgeSpeed;
+    this.vx = Math.cos(this.drawAngle) * surgeSpeed;
+    this.vy = Math.sin(this.drawAngle) * surgeSpeed;
+    // Set a quick tail lunge kick
+    this.kickAmp = 2.0;
+    this.kickPhase = 0;
+  }
+
   // ============================================================
   // UPDATE — called every frame; drives the full fish simulation
   // ============================================================
 
   update(canvas, foods, mouse, mouseIdleFrames) {
     if (this.eatCooldown > 0) this.eatCooldown--;
+    if (this.snatchTimer > 0) this.snatchTimer--;
 
     // ① State machine — handles transitions between idle/prepping/swimming/lunge
     this._tickStateMachine();
 
     // ② Find the nearest food pellet and check mouse proximity
-    const { hasValidFood, hasValidMouse, mouseDist } = this._acquireTarget(foods, mouse, mouseIdleFrames);
+    const { hasValidFood, hasValidMouse, mouseDist } = this._acquireTarget(
+      foods,
+      mouse,
+      mouseIdleFrames,
+    );
 
     // ③ If a target is locked in, interrupt current state into a prepping lunge
-    const isTargetAcquired = this.currentTarget !== null && this.reactionTimer <= 0;
-    if (isTargetAcquired && this.state !== "prepping" && this.state !== "swimming_lunge") {
+    const isTargetAcquired =
+      this.currentTarget !== null && this.reactionTimer <= 0;
+    if (
+      isTargetAcquired &&
+      this.state !== "prepping" &&
+      this.state !== "swimming_lunge"
+    ) {
       this.state = "prepping";
       this.stateTimer = Math.floor(randomRange(10, 18));
       this.targetSpeed = 0.0;
@@ -361,7 +486,8 @@ export class Fish {
 
     // ⑤ Smoothly accelerate toward target speed
     const speedDiff = this.targetSpeed - this.currentSpeed;
-    const accelRate = speedDiff < 0 ? 0.03 : (hasValidFood || mouseDist < 250 ? 0.1 : 0.07);
+    const accelRate =
+      speedDiff < 0 ? 0.025 : hasValidFood || mouseDist < 250 ? 0.07 : 0.05;
     this.currentSpeed += speedDiff * accelRate;
 
     // ⑥ Steer toward target / wander + boundary avoidance
@@ -378,10 +504,12 @@ export class Fish {
   _tickStateMachine() {
     // Spontaneous random acceleration bursts while cruising to keep the school organic
     if (this.state === "swimming") {
-      if (Math.random() < 0.0035) { // ~0.35% chance per frame (~once every 5 seconds per fish)
+      if (Math.random() < 0.005) {
+        // 0.5% chance per frame (about once every 3.3 seconds)
         this.state = "swimming_lunge";
-        this.stateTimer = Math.floor(randomRange(40, 80)); // Energetic burst duration
-        this.targetSpeed = this.baseMaxSpeed * randomRange(1.6, 2.7); // Highly energetic spontaneous lunge bursts!
+        this.stateTimer = Math.floor(randomRange(35, 70)); // Elegant burst duration
+        this.targetSpeed = this.baseMaxSpeed * randomRange(1.1, 1.6); // Gentle spontaneous bursts
+        this.wanderAngle += randomRange(-Math.PI / 2, Math.PI / 2); // Shift heading during lunges
       }
     }
 
@@ -390,34 +518,40 @@ export class Fish {
       const roll = Math.random();
 
       if (this.state === "swimming") {
-        if (roll < 0.80) {
+        if (roll < 0.75) {
           this.state = "swimming";
-          this.stateTimer = Math.floor(randomRange(80, 450)); // Extremely wide variation in cruise durations
-          this.targetSpeed = this.baseMaxSpeed * randomRange(0.4, 1.55); // Wide-spectrum cruising speeds
-        } else if (roll < 0.92) {
+          this.stateTimer = Math.floor(randomRange(80, 240)); // Longer durations for steadier cruising
+          this.targetSpeed = this.baseMaxSpeed * randomRange(0.35, 1.1); // Cruising speed variety
+          this.wanderAngle += randomRange(-Math.PI / 2, Math.PI / 2); // Moderate random turning on cruise segments
+        } else if (roll < 0.9) {
           this.state = "prepping";
           this.stateTimer = Math.floor(randomRange(6, 18));
           this.targetSpeed = 0.0;
         } else {
           this.state = "idle";
-          this.stateTimer = Math.floor(randomRange(20, 150)); // Very variable rest times
-          this.targetSpeed = this.baseMaxSpeed * randomRange(0.08, 0.35); // Super soft resting glide speeds
+          this.stateTimer = Math.floor(randomRange(20, 80)); // Balanced rest duration
+          this.targetSpeed = this.baseMaxSpeed * randomRange(0.06, 0.25);
         }
       } else if (this.state === "swimming_lunge") {
         if (roll < 0.85) {
           this.state = "swimming";
-          this.stateTimer = Math.floor(randomRange(80, 350));
-          this.targetSpeed = this.baseMaxSpeed * randomRange(0.4, 1.4); // Recover to diverse speeds
+          this.stateTimer = Math.floor(randomRange(80, 200));
+          this.targetSpeed = this.baseMaxSpeed * randomRange(0.35, 1.0);
+          this.wanderAngle += randomRange(-Math.PI / 3, Math.PI / 3);
         } else {
           this.state = "idle";
-          this.stateTimer = Math.floor(randomRange(20, 120));
-          this.targetSpeed = this.baseMaxSpeed * randomRange(0.08, 0.35);
+          this.stateTimer = Math.floor(randomRange(20, 80));
+          this.targetSpeed = this.baseMaxSpeed * randomRange(0.06, 0.25);
         }
       } else if (this.state === "idle") {
-        if (roll < 0.90) {
+        if (roll < 0.85) {
           this.state = "swimming";
-          this.stateTimer = Math.floor(randomRange(80, 350));
-          this.targetSpeed = this.baseMaxSpeed * randomRange(0.5, 1.5);
+          this.stateTimer = Math.floor(randomRange(80, 240));
+          this.targetSpeed = this.baseMaxSpeed * randomRange(0.35, 1.1);
+          this.wanderAngle += randomRange(-Math.PI / 2, Math.PI / 2);
+          // Fire the bilateral launch kick when starting to swim from idle
+          this.kickAmp = 1.8;
+          this.kickPhase = 0;
         } else {
           this.state = "prepping";
           this.stateTimer = Math.floor(randomRange(8, 20));
@@ -428,22 +562,24 @@ export class Fish {
         if (this.currentTarget) {
           this.state = "swimming_lunge";
           this.stateTimer = Math.floor(randomRange(50, 100));
-          this.targetSpeed = this.baseMaxSpeed * 2.5; // Intense speed lunge towards target!
+          this.targetSpeed = this.baseMaxSpeed * 1.6; // Lunge towards target
         } else {
-          // 50% chance of a high-speed lunge kick, 50% chance of standard cruising
+          // 50% chance of a lunge kick, 50% chance of standard cruising
           if (Math.random() < 0.5) {
             this.state = "swimming_lunge";
-            this.stateTimer = Math.floor(randomRange(40, 90));
-            this.targetSpeed = this.baseMaxSpeed * 2.0; // Spontaneous lunge sprint!
+            this.stateTimer = Math.floor(randomRange(30, 70));
+            this.targetSpeed = this.baseMaxSpeed * 1.4; // Spontaneous lunge sprint
+            this.wanderAngle += randomRange(-Math.PI / 2, Math.PI / 2);
           } else {
             this.state = "swimming";
-            this.stateTimer = Math.floor(randomRange(80, 300));
-            this.targetSpeed = this.baseMaxSpeed * 1.35;
+            this.stateTimer = Math.floor(randomRange(80, 220));
+            this.targetSpeed = this.baseMaxSpeed * 1.0;
+            this.wanderAngle += randomRange(-Math.PI / 3, Math.PI / 3);
           }
         }
         this.prevAngle = this.drawAngle;
         // Fire the bilateral launch kick — rapid L-R sweep before settling into sine wave
-        this.kickAmp = 1.2;
+        this.kickAmp = 1.8;
         this.kickPhase = 0;
       }
     }
@@ -472,7 +608,9 @@ export class Fish {
     }
 
     const mouseActive = mouse.x !== undefined && mouse.y !== undefined;
-    const mouseDist = mouseActive ? Math.hypot(mouse.x - this.x, mouse.y - this.y) : Infinity;
+    const mouseDist = mouseActive
+      ? Math.hypot(mouse.x - this.x, mouse.y - this.y)
+      : Infinity;
     const mouseMoving = mouseActive && mouseIdleFrames < 120;
 
     const hasValidFood = nearestFood !== null;
@@ -500,9 +638,9 @@ export class Fish {
       this.targetSpeed = 0.0;
     } else if (this.state === "swimming_lunge") {
       if (hasValidFood) {
-        this.targetSpeed = this.baseMaxSpeed * 1.8;
+        this.targetSpeed = this.baseMaxSpeed * 1.3;
       } else if (hasValidMouse) {
-        this.targetSpeed = this.baseMaxSpeed * 1.5;
+        this.targetSpeed = this.baseMaxSpeed * 1.1;
       }
     }
   }
@@ -514,15 +652,18 @@ export class Fish {
     if (this.state === "prepping") {
       let tx, ty;
       if (this.currentTarget === "mouse") {
-        tx = mouse.x; ty = mouse.y;
+        tx = mouse.x;
+        ty = mouse.y;
       } else if (this.currentTarget) {
-        tx = this.currentTarget.x; ty = this.currentTarget.y;
+        tx = this.currentTarget.x;
+        ty = this.currentTarget.y;
       }
       if (tx !== undefined && ty !== undefined) {
         const dx = tx - this.x;
         const dy = ty - this.y;
         const dist = Math.hypot(dx, dy);
-        if (dist > 25) { // Stop micro-shaking by avoiding aggressive target re-orientation when close
+        if (dist > 25) {
+          // Stop micro-shaking by avoiding aggressive target re-orientation when close
           targetAngle = Math.atan2(dy, dx);
         } else {
           targetAngle = this.drawAngle;
@@ -533,32 +674,44 @@ export class Fish {
     } else if (this.state === "swimming_lunge" && this.currentTarget) {
       let tx, ty;
       if (this.currentTarget === "mouse") {
-        tx = mouse.x; ty = mouse.y;
+        tx = mouse.x;
+        ty = mouse.y;
       } else {
-        tx = this.currentTarget.x; ty = this.currentTarget.y;
+        tx = this.currentTarget.x;
+        ty = this.currentTarget.y;
       }
       if (tx !== undefined && ty !== undefined) {
         const dx = tx - this.x;
         const dy = ty - this.y;
         const dist = Math.hypot(dx, dy);
-        if (dist > 25) { // Stop micro-shaking by avoiding aggressive target re-orientation when close
+        if (dist > 25) {
+          // Stop micro-shaking by avoiding aggressive target re-orientation when close
           targetAngle = Math.atan2(dy, dx);
         } else {
           targetAngle = this.drawAngle;
         }
       }
     } else if (this.state === "swimming") {
-      this.wanderAngle += randomRange(-0.008, 0.008); // Majestic long-curve cruising path
+      // Periodic random angled turns while swimming
+      if (Math.random() < 0.006) {
+        // 0.6% chance per frame (about once every 2.7 seconds)
+        this.wanderAngle += randomRange(-Math.PI / 4, Math.PI / 4); // Sudden angled turn!
+      }
+      this.wanderAngle += randomRange(-0.015, 0.015); // Majestic continuous drift
       targetAngle = this.wanderAngle;
     } else {
-      // idle: very slow, gentle direction drift
-      this.wanderAngle += randomRange(-0.002, 0.002);
+      // idle: random drift
+      if (Math.random() < 0.004) {
+        this.wanderAngle += randomRange(-Math.PI / 6, Math.PI / 6);
+      }
+      this.wanderAngle += randomRange(-0.006, 0.006); // Gentle continuous idle drift
       targetAngle = this.wanderAngle;
     }
 
     // ========== BOUNDARY AVOIDANCE STEERING ==========
     const margin = 120;
-    let avoidX = 0, avoidY = 0;
+    let avoidX = 0,
+      avoidY = 0;
     if (this.x < margin) {
       avoidX += (margin - this.x) / margin;
     } else if (this.x > canvas.width - margin) {
@@ -574,8 +727,10 @@ export class Fish {
     if (avoidMag > 0.01) {
       const avoidAngle = Math.atan2(avoidY, avoidX);
       const blend = Math.min(0.85, avoidMag);
-      const steerCos = Math.cos(targetAngle) * (1 - blend) + Math.cos(avoidAngle) * blend;
-      const steerSin = Math.sin(targetAngle) * (1 - blend) + Math.sin(avoidAngle) * blend;
+      const steerCos =
+        Math.cos(targetAngle) * (1 - blend) + Math.cos(avoidAngle) * blend;
+      const steerSin =
+        Math.sin(targetAngle) * (1 - blend) + Math.sin(avoidAngle) * blend;
       targetAngle = Math.atan2(steerSin, steerCos);
       this.wanderAngle = targetAngle; // Keep wander heading aligned with avoidance
     }
@@ -586,9 +741,9 @@ export class Fish {
     let diff = normalizeAngle(targetAngle - this.drawAngle);
 
     let maxTurn = 0.035;
-    if (this.state === "prepping")         maxTurn = 0.06;
+    if (this.state === "prepping") maxTurn = 0.06;
     else if (this.state === "swimming_lunge") maxTurn = 0.085;
-    else if (this.state === "swimming")    maxTurn = 0.048;
+    else if (this.state === "swimming") maxTurn = 0.048;
 
     const targetTurn = diff * 0.15;
     const clampedBodyDiff = Math.max(-maxTurn, Math.min(maxTurn, targetTurn));
@@ -602,15 +757,44 @@ export class Fish {
 
   // Blends velocity toward heading, advances position, and bounces off canvas edges
   _moveAndPhysics(canvas) {
-    // Since fish cannot swim backwards, velocity is smoothly blended towards the desired heading
-    // and speed, which allows physical impulses from collisions to resolve naturally.
-    const desiredVx = this.currentSpeed > 0.01 ? Math.cos(this.drawAngle) * this.currentSpeed : 0;
-    const desiredVy = this.currentSpeed > 0.01 ? Math.sin(this.drawAngle) * this.currentSpeed : 0;
+    // Cruising propulsion pulse: speed dips at tail extremes, surges at centerline crossings.
+    const sweepPhase = Math.sin(this.wiggleCycle + 0.5);
+    const pulseDepth = Math.min(0.25, this.smoothAmpFactor * 0.85);
+    const speedPulse = 1.0 - pulseDepth * Math.abs(sweepPhase);
 
-    // Smoothly blend physical velocity towards desired swimming velocity
-    // (13% blend rate — softer than 18% to prevent snappy positional jumps)
+    const desiredVx =
+      this.currentSpeed > 0.01
+        ? Math.cos(this.drawAngle) * this.currentSpeed * speedPulse
+        : 0;
+    const desiredVy =
+      this.currentSpeed > 0.01
+        ? Math.sin(this.drawAngle) * this.currentSpeed * speedPulse
+        : 0;
+
     this.vx += (desiredVx - this.vx) * 0.13;
     this.vy += (desiredVy - this.vy) * 0.13;
+
+    // Kick impulse: applied directly to velocity so each tail beat translates to movement
+    if (this.kickAmp > 0.05) {
+      const kickPulse = 1.0 - Math.abs(Math.sin(this.kickPhase));
+      const kickImpulse = this.kickAmp * this.baseMaxSpeed * kickPulse * 0.14;
+      this.vx += Math.cos(this.drawAngle) * kickImpulse;
+      this.vy += Math.sin(this.drawAngle) * kickImpulse;
+    }
+
+    // Cruising wiggle propulsion: small direct impulse at each centerline crossing
+    const cruisePulse = Math.max(0, 1.0 - Math.abs(sweepPhase));
+    const cruiseImpulse =
+      this.smoothAmpFactor * this.currentSpeed * cruisePulse * 0.18;
+    this.vx += Math.cos(this.drawAngle) * cruiseImpulse;
+    this.vy += Math.sin(this.drawAngle) * cruiseImpulse;
+
+    const maxV = this.baseMaxSpeed * 3.0;
+    const vMag = Math.hypot(this.vx, this.vy);
+    if (vMag > maxV) {
+      this.vx = (this.vx / vMag) * maxV;
+      this.vy = (this.vy / vMag) * maxV;
+    }
 
     this.x += this.vx;
     this.y += this.vy;
@@ -651,45 +835,55 @@ export class Fish {
   // Updates tail joint lag, wiggle cycle, bilateral kick, pectoral fin angle, and tail fan flare
   _updateJointsAndFins(speedDiff) {
     // Joint angle lag updates for smooth serpentine skeleton follow.
-    // normalizeAngle replaces the repeated while-loop pairs from the original code.
-    this.angle1 += normalizeAngle(this.drawAngle - this.angle1) * 0.35;      // Rigid base attached to body
-    this.angle2 += normalizeAngle(this.angle1 - this.angle2) * 0.12;         // Fluid lag for tail tip
-    this.angle3 += normalizeAngle(this.tailWorldAngle - this.angle3) * 0.30; // Fan root: responsive but not rigid
-    this.angle4 += normalizeAngle(this.angle3 - this.angle4) * 0.18;         // Lobe joint 2
-    this.angle5 += normalizeAngle(this.angle4 - this.angle5) * 0.14;         // Lobe joint 3
-    this.angle6 += normalizeAngle(this.angle5 - this.angle6) * 0.10;         // Lobe joint 4 — tip trails most
+    this.angle1 += normalizeAngle(this.drawAngle - this.angle1) * 0.55; // Rigid base attached to body
+    this.angle2 += normalizeAngle(this.angle1 - this.angle2) * 0.2; // Mid-tail segment lag
+    this.angle2b += normalizeAngle(this.angle2 - this.angle2b) * 0.12; // Tail tip segment lag
+    this.angle3 += normalizeAngle(this.tailWorldAngle - this.angle3) * 0.3; // Fan root: responsive but not rigid
+    this.angle4 += normalizeAngle(this.angle3 - this.angle4) * 0.18; // Lobe joint 2
+    this.angle5 += normalizeAngle(this.angle4 - this.angle5) * 0.14; // Lobe joint 3
+    this.angle6 += normalizeAngle(this.angle5 - this.angle6) * 0.1; // Lobe joint 4 — tip trails most
 
     // Wiggle cycle frequency: fast burst at start of movement (high accelSpeedDiff),
     // decays to cruise rate as fish reaches speed
-    const accelSpeedDiff = Math.max(0, this.targetSpeed - this.currentSpeed);
-    const freqIncrement = Math.min(0.20, this.currentSpeed * 0.035 + accelSpeedDiff * 0.18 + 0.008);
+    let freqIncrement;
+    if (this.snatchTimer > 0) {
+      // Extra rapid tail beat during the snatch
+      freqIncrement = 0.45;
+      this.kickAmp = Math.max(this.kickAmp, 2.0 * (this.snatchTimer / 20));
+    } else {
+      const accelSpeedDiff = Math.max(0, this.targetSpeed - this.currentSpeed);
+      freqIncrement = Math.min(
+        0.2,
+        this.currentSpeed * 0.035 + accelSpeedDiff * 0.18 + 0.008,
+      );
+    }
     this.wiggleCycle += freqIncrement;
 
     // Bilateral kick: advance phase quickly and decay amplitude each frame
-    this.kickPhase += 0.28;   // One full L-R cycle in ~22 frames
-    this.kickAmp   *= 0.94;   // Fades to ~5% after ~50 frames
-    if (this.kickAmp < 0.005) this.kickAmp = 0; // Clean cutoff
+    this.kickPhase += 0.42; // Rapid, energetic starting flicks
+    this.kickAmp *= 0.975; // Slower decay to allow multiple following snaps
+    if (this.kickAmp < 0.05) this.kickAmp = 0; // Clean cutoff
 
     // ========== PECTORAL FIN ANGLE ==========
     const speedRatio = Math.min(1.0, this.currentSpeed / this.baseMaxSpeed);
-    const turnRatio  = Math.min(1.0, this.smoothTurnRate / 0.025); // Lower divisor makes fin flapping extremely active on turns
+    const turnRatio = Math.min(1.0, this.smoothTurnRate / 0.025); // Lower divisor makes fin flapping extremely active on turns
 
     let desiredFinAngle = 0.05; // Default: fully flared
     if (this.currentSpeed <= 0.08) {
       desiredFinAngle = 0.05;
-    } else if (speedDiff > 0.01) {
-      desiredFinAngle = 0.95; // Snap pin during acceleration
-    } else if (speedDiff < -0.01) {
+    } else if (speedDiff > 0.35 || this.snatchTimer > 0) {
+      desiredFinAngle = 0.95; // Snap pin ONLY during sudden intense start of movement
+    } else if (speedDiff < -0.05) {
       desiredFinAngle = 0.05; // Flare for braking
     } else {
-      desiredFinAngle = 0.1 + speedRatio * 0.6;
+      desiredFinAngle = 0.15 + speedRatio * 0.25; // Cruise flap: moderate flare to allow flapping visibility
     }
 
     if (this.currentSpeed > 0.08 && speedDiff <= 0.01 && turnRatio > 0.05) {
       desiredFinAngle = desiredFinAngle * (1.0 - turnRatio) + 0.0 * turnRatio;
     }
 
-    const finRate = speedDiff > 0.01 ? 0.35 : 0.1;
+    const finRate = speedDiff > 0.35 || this.snatchTimer > 0 ? 0.35 : 0.08;
     this.finAngle += (desiredFinAngle - this.finAngle) * finRate;
 
     // ========== TAIL FAN FLARE ==========
