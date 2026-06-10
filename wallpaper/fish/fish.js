@@ -62,6 +62,15 @@ export class Fish {
     this.smoothTailDev = 0; // kept for backward compat, unused
     this.tailWorldAngle = this.drawAngle + Math.PI; // World-space geometric angle of the tail tip (including wiggle)
 
+    this.collisionCircles = {
+      mouth: { x: this.x, y: this.y, r: this.radius * 0.3 },
+      head: { x: this.x, y: this.y, r: this.radius * 0.58 },
+      body: { x: this.x, y: this.y, r: this.radius * 0.75 },
+      s1: { x: this.x, y: this.y, r: this.radius * 0.51 },
+      s2: { x: this.x, y: this.y, r: this.radius * 0.39 },
+      s3: { x: this.x, y: this.y, r: this.radius * 0.30 }
+    };
+
     // Bioluminescent marine color theme - Now solid Coral Koi (matching the uploaded image)
     this.color1 = color;
     this.color2 = color;
@@ -202,6 +211,37 @@ export class Fish {
       r3,
     );
     this._drawTailFan(ctx, x3, y3, tailAngle, r3);
+
+    // Update collision circles in world coordinates
+    const cosA = Math.cos(this.drawAngle);
+    const sinA = Math.sin(this.drawAngle);
+
+    const headWorldX = this.x + (headX * cosA - headY * sinA);
+    const headWorldY = this.y + (headX * sinA + headY * cosA);
+
+    const mouthLocalX = headX + headR * 0.7;
+    const mouthLocalY = headY;
+    const mouthWorldX = this.x + (mouthLocalX * cosA - mouthLocalY * sinA);
+    const mouthWorldY = this.y + (mouthLocalX * sinA + mouthLocalY * cosA);
+    const mouthRadius = headR * 0.55;
+
+    const s1WorldX = this.x + (x1 * cosA - y1 * sinA);
+    const s1WorldY = this.y + (x1 * sinA + y1 * cosA);
+
+    const s2WorldX = this.x + (x2 * cosA - y2 * sinA);
+    const s2WorldY = this.y + (x2 * sinA + y2 * cosA);
+
+    const s3WorldX = this.x + (x3 * cosA - y3 * sinA);
+    const s3WorldY = this.y + (x3 * sinA + y3 * cosA);
+
+    this.collisionCircles = {
+      mouth: { x: mouthWorldX, y: mouthWorldY, r: mouthRadius },
+      head: { x: headWorldX, y: headWorldY, r: headR },
+      body: { x: this.x, y: this.y, r: this.radius * 0.75 },
+      s1: { x: s1WorldX, y: s1WorldY, r: r1 },
+      s2: { x: s2WorldX, y: s2WorldY, r: r2 },
+      s3: { x: s3WorldX, y: s3WorldY, r: r3 }
+    };
 
     ctx.restore();
   }

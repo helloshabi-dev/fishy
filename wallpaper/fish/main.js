@@ -528,9 +528,12 @@ window.addEventListener("click", function (event) {
   foods.push({
     x: event.clientX,
     y: event.clientY,
+    vx: 0,
+    vy: 0,
     radius: 4.5,
     color: "#8b4513", // Solid flat SaddleBrown color pellet (Abowman style)
-    floatTimer: randomRange(0, 100)
+    floatTimer: randomRange(0, 100),
+    touchCooldown: 0
   });
 });
 
@@ -607,6 +610,35 @@ function animate() {
   for (let i = foods.length - 1; i >= 0; i--) {
     const food = foods[i];
 
+    // Apply food movement dynamics and screen boundaries
+    if (food.vx !== undefined && food.vy !== undefined) {
+      food.x += food.vx;
+      food.y += food.vy;
+      food.vx *= 0.92; // Friction/drag
+      food.vy *= 0.92;
+
+      // Bounce and clamp within canvas boundaries
+      if (food.x - food.radius < 0) {
+        food.x = food.radius;
+        food.vx = -food.vx * 0.5;
+      } else if (food.x + food.radius > canvas.width) {
+        food.x = canvas.width - food.radius;
+        food.vx = -food.vx * 0.5;
+      }
+      if (food.y - food.radius < 0) {
+        food.y = food.radius;
+        food.vy = -food.vy * 0.5;
+      } else if (food.y + food.radius > canvas.height) {
+        food.y = canvas.height - food.radius;
+        food.vy = -food.vy * 0.5;
+      }
+    }
+
+    // Decrement touch cooldown
+    if (food.touchCooldown > 0) {
+      food.touchCooldown--;
+    }
+
     // Slow circular float drift
     food.floatTimer += 0.035;
     const drawX = food.x + Math.sin(food.floatTimer) * 2.5;
@@ -623,7 +655,7 @@ function animate() {
 
   // 4. Resolve physics & feeding
   resolveCollisions(fishes);
-  checkFeeding(fishes, foods);
+  checkFeeding(fishes, foods, ripples);
 
   // 5. Update & draw fishes
   for (let i = 0; i < fishes.length; i++) {

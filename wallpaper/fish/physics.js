@@ -1,5 +1,6 @@
 // Physics functions — fish-to-fish collision resolution and feeding
-import { randomRange } from './utils.js';
+import { randomRange, normalizeAngle } from './utils.js';
+import { Ripple } from './ripple.js';
 
 // Resolves fish-to-fish collisions: faster fish (the pusher) pushes the slower/stationary fish
 // and slides smoothly around it rather than bouncing backward elastically.
@@ -96,30 +97,101 @@ export function resolveCollisions(fishes) {
   }
 }
 
-// Handles fishes eating food pellets
-export function checkFeeding(fishes, foods) {
+// Handles fishes eating food pellets and pushing them
+export function checkFeeding(fishes, foods, ripples) {
   for (let i = fishes.length - 1; i >= 0; i--) {
     const fish = fishes[i];
 
-    // Only check feeding if the fish is not on eating cooldown
-    if (fish.eatCooldown > 0) continue;
+    // Check collision circles (only if defined)
+    if (!fish.collisionCircles) continue;
 
     for (let j = foods.length - 1; j >= 0; j--) {
       const food = foods[j];
-      const dist = Math.hypot(fish.x - food.x, fish.y - food.y);
 
-      // Check eating bounds
-      if (dist < fish.radius + food.radius) {
-        // Remove food pellet (only one per frame per fish to prevent instant stacked food swallow)
-        foods.splice(j, 1);
-        // Set eating cooldown (3 to 5 seconds at 60 FPS) to give other fish a chance!
-        fish.eatCooldown = Math.floor(randomRange(180, 300));
-        
-        // Trigger snatch movement
-        if (typeof fish.triggerSnatch === 'function') {
-          fish.triggerSnatch();
+      // 1. Mouth touch (Eating)
+      // The mouth is located on the front of the head
+      const head = fish.collisionCircles.head;
+      const distToHead = Math.hypot(food.x - head.x, food.y - head.y);
+      const isTouchingHead = distToHead < head.r + food.radius;
+
+      if (isTouchingHead) {
+        const dx = food.x - head.x;
+        const dy = food.y - head.y;
+        const angleToFood = Math.atan2(dy, dx);
+        const angleDiff = Math.abs(normalizeAngle(angleToFood - fish.drawAngle));
+
+        // Only allow eating if within a narrow front sector (approx 34 degrees = 0.6 rad)
+        if (angleDiff < 0.6 && fish.eatCooldown <= 0) {
+          foods.splice(j, 1);
+          fish.eatCooldown = Math.floor(randomRange(180, 300));
+          
+          if (typeof fish.triggerSnatch === 'function') {
+            fish.triggerSnatch();
+          }
+
+          if (ripples) {
+            ripples.push(new Ripple(food.x, food.y));
+          }
+          break; // Eat only one food per frame
         }
-        break;
+      }
+
+      // 2. Body / Side of Head touch (Pushing)
+      let collided = false;
+      let pushCircle = null;
+
+      // If it touches any of the collision circles (head, body, or tail segments)
+      const circlesToCheck = [
+        fish.collisionCircles.head,
+        fish.collisionCircles.body,
+        fish.collisionCircles.s1,
+        fish.collisionCircles.s2,
+        fish.collisionCircles.s3
+      ];
+
+      for (const circle of circlesToCheck) {
+        if (!circle) continue;
+        const dist = Math.hypot(food.x - circle.x, food.y - circle.y);
+        if (dist < circle.r + food.radius) {
+          collided = true;
+          pushCircle = circle;
+          break;
+        }
+      }
+
+      if (collided && pushCircle) {
+        const dist = Math.hypot(food.x - pushCircle.x, food.y - pushCircle.y) || 0.1;
+        const overlap = pushCircle.r + food.radius - dist;
+        const nx = (food.x - pushCircle.x) / dist;
+        const ny = (food.y - pushCircle.y) / dist;
+
+        // Push food pellet out of collision overlap
+        food.x += nx * overlap;
+        food.y += ny * overlap;
+
+        // Apply physical momentum transfer from fish movement
+        if (food.vx === undefined) food.vx = 0;
+        if (food.vy === undefined) food.vy = 0;
+
+        const fishSpeed = Math.hypot(fish.vx, fish.vy);
+        const pushForce = Math.max(0.6, fishSpeed * 1.1);
+        food.vx += nx * pushForce;
+        food.vy += ny * pushForce;
+
+        // Cap maximum food velocity
+        const foodSpeed = Math.hypot(food.vx, food.vy);
+        if (foodSpeed > 6) {
+          food.vx = (food.vx / foodSpeed) * 6;
+          food.vy = (food.vy / foodSpeed) * 6;
+        }
+
+        // Spawn a rate-limited water ripple on push
+        if (ripples) {
+          if (!food.touchCooldown || food.touchCooldown <= 0) {
+            ripples.push(new Ripple(food.x, food.y));
+            food.touchCooldown = 25; // 25 frames debounce cooldown
+          }
+        }
       }
     }
   }
