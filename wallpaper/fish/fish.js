@@ -13,6 +13,7 @@ export class Fish {
     // Individuality factor for speed variance (some fish are naturally speedier than others)
     this.speedVariance = randomRange(0.85, 1.15);
     
+    this.speedMultiplier = 1.0;
     this.radius = radius;
     this.targetRadius = targetRadius || radius;
     this.name = name || "";
@@ -113,10 +114,11 @@ export class Fish {
     this.updateSpeedRange();
   }
 
-  updateSpeedRange() {
+  updateSpeedRange(multiplier = this.speedMultiplier || 1.0) {
+    this.speedMultiplier = multiplier;
     // Dynamic base speed based on size (radius).
     // Smaller fish swim slower, while larger fish swim faster.
-    this.baseMaxSpeed = (0.6 + 0.35 * Math.sqrt(this._radius || 12)) * (this.speedVariance || 1.0);
+    this.baseMaxSpeed = (0.6 + 0.35 * Math.sqrt(this._radius || 12)) * (this.speedVariance || 1.0) * this.speedMultiplier;
     this.maxSpeed = this.baseMaxSpeed;
   }
 

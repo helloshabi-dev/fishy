@@ -917,6 +917,15 @@
           <input type="range" id="fish-count-slider" class="range-slider" min="1" max="15" value="2" />
         </div>
 
+        <!-- Swim Speed -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Swim Speed</span>
+            <span class="control-value" id="fish-speed-value">1.00x</span>
+          </div>
+          <input type="range" id="fish-speed-slider" class="range-slider" min="0.1" max="3" step="0.05" value="1.00" />
+        </div>
+
         <!-- Max Capacity (Breeding Limit) -->
         <div class="control-group">
           <div class="control-label">
@@ -1004,30 +1013,32 @@
         </div>
 
         <!-- Separation Weight Slider -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Separation (Avoid Crowding)</span>
-            <span class="control-value" id="schooling-separation-value">1.20</span>
+        <div id="schooling-sliders-container">
+          <div class="control-group">
+            <div class="control-label">
+              <span>Separation (Avoid Crowding)</span>
+              <span class="control-value" id="schooling-separation-value">1.20</span>
+            </div>
+            <input type="range" id="schooling-separation-slider" class="range-slider" min="0" max="3" step="0.05" value="1.20" />
           </div>
-          <input type="range" id="schooling-separation-slider" class="range-slider" min="0" max="3" step="0.05" value="1.20" />
-        </div>
 
-        <!-- Alignment Weight Slider -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Alignment (Match Direction)</span>
-            <span class="control-value" id="schooling-alignment-value">1.00</span>
+          <!-- Alignment Weight Slider -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Alignment (Match Direction)</span>
+              <span class="control-value" id="schooling-alignment-value">1.00</span>
+            </div>
+            <input type="range" id="schooling-alignment-slider" class="range-slider" min="0" max="3" step="0.05" value="1.00" />
           </div>
-          <input type="range" id="schooling-alignment-slider" class="range-slider" min="0" max="3" step="0.05" value="1.00" />
-        </div>
 
-        <!-- Cohesion Weight Slider -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Cohesion (Group Together)</span>
-            <span class="control-value" id="schooling-cohesion-value">0.80</span>
+          <!-- Cohesion Weight Slider -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Cohesion (Group Together)</span>
+              <span class="control-value" id="schooling-cohesion-value">0.80</span>
+            </div>
+            <input type="range" id="schooling-cohesion-slider" class="range-slider" min="0" max="3" step="0.05" value="0.80" />
           </div>
-          <input type="range" id="schooling-cohesion-slider" class="range-slider" min="0" max="3" step="0.05" value="0.80" />
         </div>
       </div>
 

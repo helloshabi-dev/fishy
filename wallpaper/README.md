@@ -100,7 +100,13 @@ This runs a headless Electron process to render the fish canvas to `build/icon.p
 
 ## 📜 Version History (Changelog)
 
-### **v4.0.1** (Current Version)
+### **v4.1.0** (Current Version)
+*   **Swim Speed Control**: Added a swim speed slider in settings to adjust fish swimming speed in real time.
+*   **Dynamic Schooling Sliders**: Schooling weight sliders are now dynamically hidden when schooling behavior is disabled, keeping the settings interface clean.
+*   **Parent Size in Family Tree**: Lineage view now displays parent size details next to roles.
+*   **Improved Resolution**: Set canvas rendering back to full resolution (1.0 scale) for sharper, crisper visuals.
+
+### **v4.0.1**
 *   **Performance & Memory Optimizations**: Added battery-conscious framerate throttling (60fps on AC / 24fps on battery), auto-pause rendering on screen lock, disabled unnecessary speech APIs and software rasterizer, and optimized rendering arrays to reduce garbage-collection overhead.
 *   **Wall Avoidance & Feeding Fixes**: Resolved bugs preventing fish from reaching food close to walls and stopped fish from getting stuck in endless circling loops near the boundaries.
 

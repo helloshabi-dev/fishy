@@ -11,7 +11,7 @@ import { resolveCollisions, checkFeeding, resolveFoodCollisions } from './physic
 
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
-const resolutionScale = 0.75; // 75% resolution throttle to save GPU and memory overhead
+const resolutionScale = 1; // resolution throttle to save GPU and memory overhead
 
 // ============================================================
 // SETTINGS STATE & LOCALSTORAGE PERSISTENCE
@@ -27,11 +27,13 @@ const visibleUnnamedCount = activeProfiles.length > 0 ? activeProfiles.filter(p 
 
 const storedCapacity = parseInt(localStorage.getItem("fishy_maxCapacity") || "10");
 const maxCapacity = Math.max(fishCount, storedCapacity);
+const storedSpeed = parseFloat(localStorage.getItem("fishy_speedMultiplier") || "1.00");
 
 const settings = {
   fishSize: parseInt(localStorage.getItem("fishy_fishSize") || "12"), // default is 12px
   fishCount: fishCount, // total count
   maxCapacity: maxCapacity, // breeding capacity
+  speedMultiplier: storedSpeed,
   fishColor: localStorage.getItem("fishy_fishColor") || "#f0654e",
   bgOpacity: parseInt(localStorage.getItem("fishy_bgOpacity") || "50"), // default background opacity is 50%
   bgColor: localStorage.getItem("fishy_bgColor") || "#07111e",
@@ -490,6 +492,7 @@ function renderFishList() {
           const { x, y, vx, vy } = getRandomSpawnPos(150);
           const restoredFish = new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id, p.gender, p.breedingEnabled, p.isBred, p.isMature !== false, p.birthTime, p.targetRadius, p.birthCity || null);
           if (p.parentInfo) restoredFish.parentInfo = p.parentInfo;
+          restoredFish.updateSpeedRange(settings.speedMultiplier);
           fishes.push(restoredFish);
           saveFishProfiles();
           renderFishList();
@@ -587,6 +590,13 @@ function syncSettingsUI() {
     if (countVal) countVal.textContent = settings.fishCount;
   }
   
+  const speedSlider = document.getElementById("fish-speed-slider");
+  const speedVal = document.getElementById("fish-speed-value");
+  if (speedSlider) {
+    speedSlider.value = settings.speedMultiplier;
+    if (speedVal) speedVal.textContent = settings.speedMultiplier.toFixed(2) + "x";
+  }
+  
   const capacitySlider = document.getElementById("fish-capacity-slider");
   const capacityVal = document.getElementById("fish-capacity-value");
   if (capacitySlider) {
@@ -620,6 +630,10 @@ function syncSettingsUI() {
   const schoolingToggle = document.getElementById("schooling-toggle");
   if (schoolingToggle) {
     schoolingToggle.checked = settings.schoolingEnabled;
+  }
+  const schoolingSlidersContainer = document.getElementById("schooling-sliders-container");
+  if (schoolingSlidersContainer) {
+    schoolingSlidersContainer.style.display = settings.schoolingEnabled ? "block" : "none";
   }
   const separationSlider = document.getElementById("schooling-separation-slider");
   const separationVal = document.getElementById("schooling-separation-value");
@@ -698,6 +712,7 @@ function adjustFishCount(targetCount) {
       removed++;
     }
   }
+  fishes.forEach(fish => fish.updateSpeedRange(settings.speedMultiplier));
   saveFishProfiles();
   scheduleRenderFishList();
 }
@@ -710,6 +725,8 @@ function initSettingsUI() {
   const sizeVal = document.getElementById("fish-size-value");
   const countSlider = document.getElementById("fish-count-slider");
   const countVal = document.getElementById("fish-count-value");
+  const speedSlider = document.getElementById("fish-speed-slider");
+  const speedVal = document.getElementById("fish-speed-value");
   const capacitySlider = document.getElementById("fish-capacity-slider");
   const capacityVal = document.getElementById("fish-capacity-value");
   const opacitySlider = document.getElementById("bg-opacity-slider");
@@ -762,6 +779,19 @@ function initSettingsUI() {
     localStorage.setItem("fishy_fishCount", count);
     adjustFishCount(count);
   });
+
+  // Speed slider listener
+  if (speedSlider) {
+    speedSlider.addEventListener("input", (e) => {
+      const speed = parseFloat(e.target.value);
+      settings.speedMultiplier = speed;
+      if (speedVal) speedVal.textContent = speed.toFixed(2) + "x";
+      localStorage.setItem("fishy_speedMultiplier", speed);
+      fishes.forEach((fish) => {
+        fish.updateSpeedRange(speed);
+      });
+    });
+  }
 
   // Max Capacity slider listener
   if (capacitySlider) {
@@ -818,7 +848,9 @@ function initSettingsUI() {
     addFishBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const { x, y, vx, vy } = getRandomSpawnPos(150);
-      fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null, null, true, false, true, null, null, detectedCity || null));
+      const newFish = new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null, null, true, false, true, null, null, detectedCity || null);
+      newFish.updateSpeedRange(settings.speedMultiplier);
+      fishes.push(newFish);
       saveFishProfiles();
       renderFishList();
     });
@@ -883,6 +915,10 @@ function initSettingsUI() {
     schoolingToggle.addEventListener("change", (e) => {
       settings.schoolingEnabled = e.target.checked;
       localStorage.setItem("fishy_schoolingEnabled", e.target.checked);
+      const schoolingSlidersContainer = document.getElementById("schooling-sliders-container");
+      if (schoolingSlidersContainer) {
+        schoolingSlidersContainer.style.display = e.target.checked ? "block" : "none";
+      }
     });
   }
 
@@ -1297,7 +1333,9 @@ function buildFamilyTreeNode(data, depth, side) {
   if (label) {
     const roleEl = document.createElement('span');
     roleEl.className = 'ft-tree-role';
-    roleEl.textContent = label;
+    const sizeVal = data.radius || data.size;
+    const sizeText = sizeVal ? ` • ${sizeVal.toFixed(1)}px` : '';
+    roleEl.textContent = label + sizeText;
     header.appendChild(roleEl);
   }
 
@@ -1694,6 +1732,7 @@ function openImportModal() {
     if (decodedProfile.parentInfo) {
       importedFish.parentInfo = decodedProfile.parentInfo;
     }
+    importedFish.updateSpeedRange(settings.speedMultiplier);
     
     fishes.push(importedFish);
     saveFishProfiles();
@@ -1790,6 +1829,7 @@ function init() {
     }
   }
 
+  fishes.forEach(fish => fish.updateSpeedRange(settings.speedMultiplier));
   saveFishProfiles();
   renderFishList();
 }
@@ -2015,6 +2055,7 @@ function animate() {
           }
         };
         
+        baby.updateSpeedRange(settings.speedMultiplier);
         fishes.push(baby);
         
         // Heart burst!
