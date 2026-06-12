@@ -100,7 +100,12 @@ This runs a headless Electron process to render the fish canvas to `build/icon.p
 
 ## 📜 Version History (Changelog)
 
-### **v3.1.0** (Current Version)
+### **v3.2.0** (Current Version)
+*   **Schooling Behavior**: Introduced realistic top-view schooling (flocking) behavior to the fish using Craig Reynolds' Boids algorithm (Cohesion, Alignment, and Separation).
+*   **Customizable Schooling Weights**: Added a "Schooling Behavior" section to the settings panel to toggle schooling and adjust the influence weights of Cohesion, Separation, and Alignment in real-time.
+*   **Pellet-to-Pellet Physics**: Implemented physical collisions for food pellets, pushing overlapping pellets apart with drift-offset compensation and exact spawn jitter protection to prevent visual clustering.
+
+### **v3.1.0**
 *   **Saved Fish Persistence**: The app now remembers all your active fish (including their names, sizes, custom colors, and family lineage) when you close and reopen the app, so your favorite fish are never lost.
 *   **Separate Breeding Limit Control**: Added a **Max Capacity** slider to set the maximum allowed fish in your pond, making it easy to save slots for baby fish to breed naturally without needing to manually delete active fish.
 *   **High-Definition Previews**: Preview thumbnails are now rounded, borderless, and rendered in high definition so they look extremely crisp and clear on all screens.

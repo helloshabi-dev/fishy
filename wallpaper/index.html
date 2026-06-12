@@ -825,6 +825,47 @@
         </div>
       </div>
 
+      <!-- SCHOOLING BEHAVIOR -->
+      <div class="settings-section">
+        <div class="settings-section-title">Schooling Behavior</div>
+        
+        <!-- Schooling Toggle -->
+        <div class="switch-group">
+          <span class="switch-label">Enable Schooling</span>
+          <label class="switch">
+            <input type="checkbox" id="schooling-toggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Separation Weight Slider -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Separation (Avoid Crowding)</span>
+            <span class="control-value" id="schooling-separation-value">1.20</span>
+          </div>
+          <input type="range" id="schooling-separation-slider" class="range-slider" min="0" max="3" step="0.05" value="1.20" />
+        </div>
+
+        <!-- Alignment Weight Slider -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Alignment (Match Direction)</span>
+            <span class="control-value" id="schooling-alignment-value">1.00</span>
+          </div>
+          <input type="range" id="schooling-alignment-slider" class="range-slider" min="0" max="3" step="0.05" value="1.00" />
+        </div>
+
+        <!-- Cohesion Weight Slider -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Cohesion (Group Together)</span>
+            <span class="control-value" id="schooling-cohesion-value">0.80</span>
+          </div>
+          <input type="range" id="schooling-cohesion-slider" class="range-slider" min="0" max="3" step="0.05" value="0.80" />
+        </div>
+      </div>
+
       <!-- BACKGROUND CUSTOMIZATION -->
       <div class="settings-section">
         <div class="settings-section-title">Background Layer</div>

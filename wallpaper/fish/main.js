@@ -2,7 +2,7 @@
 import { randomRange } from './utils.js';
 import { Ripple } from './ripple.js';
 import { Fish } from './fish.js';
-import { resolveCollisions, checkFeeding } from './physics.js';
+import { resolveCollisions, checkFeeding, resolveFoodCollisions } from './physics.js';
 
 
 // ============================================================
@@ -37,7 +37,11 @@ const settings = {
   autoStart: localStorage.getItem("fishy_autoStart") !== "false", // default is true (autostart enabled)
   feedingMode: localStorage.getItem("fishy_feedingMode") === "true", // default is false (don't intercept clicks by default)
   fishProfiles: initialProfiles,
-  visibleUnnamedCount: visibleUnnamedCount
+  visibleUnnamedCount: visibleUnnamedCount,
+  schoolingEnabled: localStorage.getItem("fishy_schoolingEnabled") !== "false", // default is true
+  schoolingSeparation: parseFloat(localStorage.getItem("fishy_schoolingSeparation") || "1.2"),
+  schoolingAlignment: parseFloat(localStorage.getItem("fishy_schoolingAlignment") || "1.0"),
+  schoolingCohesion: parseFloat(localStorage.getItem("fishy_schoolingCohesion") || "0.8")
 };
 
 // Utility to convert hex colors to RGBA with dynamic opacity
@@ -531,6 +535,29 @@ function syncSettingsUI() {
     autostartToggle.checked = settings.autoStart;
   }
 
+  const schoolingToggle = document.getElementById("schooling-toggle");
+  if (schoolingToggle) {
+    schoolingToggle.checked = settings.schoolingEnabled;
+  }
+  const separationSlider = document.getElementById("schooling-separation-slider");
+  const separationVal = document.getElementById("schooling-separation-value");
+  if (separationSlider) {
+    separationSlider.value = settings.schoolingSeparation;
+    if (separationVal) separationVal.textContent = settings.schoolingSeparation.toFixed(2);
+  }
+  const alignmentSlider = document.getElementById("schooling-alignment-slider");
+  const alignmentVal = document.getElementById("schooling-alignment-value");
+  if (alignmentSlider) {
+    alignmentSlider.value = settings.schoolingAlignment;
+    if (alignmentVal) alignmentVal.textContent = settings.schoolingAlignment.toFixed(2);
+  }
+  const cohesionSlider = document.getElementById("schooling-cohesion-slider");
+  const cohesionVal = document.getElementById("schooling-cohesion-value");
+  if (cohesionSlider) {
+    cohesionSlider.value = settings.schoolingCohesion;
+    if (cohesionVal) cohesionVal.textContent = settings.schoolingCohesion.toFixed(2);
+  }
+
   // Sync active states on preset buttons
   document.querySelectorAll("#fish-color-presets .color-preset").forEach(btn => {
     if (btn.getAttribute("data-color").toLowerCase() === settings.fishColor.toLowerCase()) {
@@ -761,6 +788,48 @@ function initSettingsUI() {
       if (window.electronAPI && typeof updateIgnoreMouseEvents === "function") {
         updateIgnoreMouseEvents();
       }
+    });
+  }
+
+  // Schooling Behavior listeners
+  const schoolingToggle = document.getElementById("schooling-toggle");
+  if (schoolingToggle) {
+    schoolingToggle.addEventListener("change", (e) => {
+      settings.schoolingEnabled = e.target.checked;
+      localStorage.setItem("fishy_schoolingEnabled", e.target.checked);
+    });
+  }
+
+  const separationSlider = document.getElementById("schooling-separation-slider");
+  const separationVal = document.getElementById("schooling-separation-value");
+  if (separationSlider) {
+    separationSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value);
+      settings.schoolingSeparation = val;
+      localStorage.setItem("fishy_schoolingSeparation", val);
+      if (separationVal) separationVal.textContent = val.toFixed(2);
+    });
+  }
+
+  const alignmentSlider = document.getElementById("schooling-alignment-slider");
+  const alignmentVal = document.getElementById("schooling-alignment-value");
+  if (alignmentSlider) {
+    alignmentSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value);
+      settings.schoolingAlignment = val;
+      localStorage.setItem("fishy_schoolingAlignment", val);
+      if (alignmentVal) alignmentVal.textContent = val.toFixed(2);
+    });
+  }
+
+  const cohesionSlider = document.getElementById("schooling-cohesion-slider");
+  const cohesionVal = document.getElementById("schooling-cohesion-value");
+  if (cohesionSlider) {
+    cohesionSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value);
+      settings.schoolingCohesion = val;
+      localStorage.setItem("fishy_schoolingCohesion", val);
+      if (cohesionVal) cohesionVal.textContent = val.toFixed(2);
     });
   }
 
@@ -1238,7 +1307,7 @@ window.addEventListener("click", function (event) {
     y: event.clientY,
     vx: 0,
     vy: 0,
-    radius: 4.5,
+    radius: 2,
     color: "#8b4513", // Solid flat SaddleBrown color pellet (Abowman style)
     floatTimer: randomRange(0, 100),
     touchCooldown: 0
@@ -1353,6 +1422,7 @@ function animate() {
   // 4. Resolve physics & feeding
   const visibleFishes = fishes.filter(f => f.visible !== false);
   resolveCollisions(visibleFishes, fishes.length < settings.maxCapacity);
+  resolveFoodCollisions(foods);
   checkFeeding(visibleFishes, foods, ripples);
 
   // 4b. Update and draw heart particles
@@ -1472,10 +1542,10 @@ function animate() {
     }
     
     if (fish.visible !== false) {
-      fish.update(canvas, foods, mouse, mouseIdleFrames);
+      fish.update(canvas, foods, mouse, mouseIdleFrames, fishes, settings);
       fish.draw(ctx, isSettingsOpen);
     } else {
-      fish.update(canvas, [], { x: undefined, y: undefined }, 9999);
+      fish.update(canvas, [], { x: undefined, y: undefined }, 9999, fishes, settings);
     }
   }
 }

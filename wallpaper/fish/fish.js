@@ -658,7 +658,79 @@ export class Fish {
     this.breedingTimer--;
   }
 
-  update(canvas, foods, mouse, mouseIdleFrames) {
+  _school(fishes) {
+    let sepX = 0, sepY = 0;
+    let alignX = 0, alignY = 0;
+    let cohX = 0, cohY = 0;
+    let neighborsCount = 0;
+
+    const perceptionRadius = 250;
+    const separationRadius = 70;
+
+    for (let i = 0; i < fishes.length; i++) {
+      const other = fishes[i];
+      if (other === this || other.visible === false || other.isBreeding) continue;
+
+      const dx = other.x - this.x;
+      const dy = other.y - this.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < perceptionRadius) {
+        // Separation
+        if (dist < separationRadius && dist > 0) {
+          sepX -= dx / dist;
+          sepY -= dy / dist;
+        }
+
+        // Alignment
+        alignX += Math.cos(other.drawAngle);
+        alignY += Math.sin(other.drawAngle);
+
+        // Cohesion
+        cohX += other.x;
+        cohY += other.y;
+
+        neighborsCount++;
+      }
+    }
+
+    if (neighborsCount > 0) {
+      // Average alignment
+      alignX /= neighborsCount;
+      alignY /= neighborsCount;
+
+      // Average cohesion
+      cohX = (cohX / neighborsCount) - this.x;
+      cohY = (cohY / neighborsCount) - this.y;
+
+      // Normalize alignment
+      const alignDist = Math.hypot(alignX, alignY);
+      if (alignDist > 0) {
+        alignX /= alignDist;
+        alignY /= alignDist;
+      }
+
+      // Normalize cohesion
+      const cohDist = Math.hypot(cohX, cohY);
+      if (cohDist > 0) {
+        cohX /= cohDist;
+        cohY /= cohDist;
+      }
+
+      // Normalize separation
+      const sepDist = Math.hypot(sepX, sepY);
+      if (sepDist > 0) {
+        sepX /= sepDist;
+        sepY /= sepDist;
+      }
+
+      return { sepX, sepY, alignX, alignY, cohX, cohY, hasSchool: true };
+    }
+
+    return { sepX: 0, sepY: 0, alignX: 0, alignY: 0, cohX: 0, cohY: 0, hasSchool: false };
+  }
+
+  update(canvas, foods, mouse, mouseIdleFrames, fishes = [], schoolingSettings = {}) {
     if (this.eatCooldown > 0) this.eatCooldown--;
     if (this.snatchTimer > 0) this.snatchTimer--;
     if (this.breedingCooldown > 0) this.breedingCooldown--;
@@ -716,7 +788,7 @@ export class Fish {
     this.currentSpeed += speedDiff * accelRate;
 
     // ⑥ Steer toward target / wander + boundary avoidance
-    this._steer(canvas, mouse);
+    this._steer(canvas, mouse, fishes, schoolingSettings);
 
     // ⑦ Advance position and bounce off walls
     this._moveAndPhysics(canvas);
@@ -871,7 +943,7 @@ export class Fish {
   }
 
   // Computes target heading, blends in boundary avoidance, and rotates drawAngle smoothly
-  _steer(canvas, mouse) {
+  _steer(canvas, mouse, fishes = [], schoolingSettings = {}) {
     let targetAngle = this.drawAngle;
 
     if (this.state === "prepping") {
@@ -923,7 +995,38 @@ export class Fish {
         this.wanderAngle += randomRange(-Math.PI / 4, Math.PI / 4); // Sudden angled turn!
       }
       this.wanderAngle += randomRange(-0.015, 0.015); // Majestic continuous drift
-      targetAngle = this.wanderAngle;
+
+      if (schoolingSettings.schoolingEnabled && fishes.length > 1) {
+        const school = this._school(fishes);
+        if (school.hasSchool) {
+          const wanderX = Math.cos(this.wanderAngle);
+          const wanderY = Math.sin(this.wanderAngle);
+
+          // Combined steering vector
+          const wWander = 0.5;
+          const wSeparation = schoolingSettings.schoolingSeparation !== undefined ? schoolingSettings.schoolingSeparation : 1.2;
+          const wAlignment = schoolingSettings.schoolingAlignment !== undefined ? schoolingSettings.schoolingAlignment : 1.0;
+          const wCohesion = schoolingSettings.schoolingCohesion !== undefined ? schoolingSettings.schoolingCohesion : 0.8;
+
+          const steerX = wanderX * wWander + 
+                        school.sepX * wSeparation + 
+                        school.alignX * wAlignment + 
+                        school.cohX * wCohesion;
+          const steerY = wanderY * wWander + 
+                        school.sepY * wSeparation + 
+                        school.alignY * wAlignment + 
+                        school.cohY * wCohesion;
+
+          targetAngle = Math.atan2(steerY, steerX);
+          
+          // Gently rotate wanderAngle towards targetAngle to ensure smooth continuity
+          this.wanderAngle += normalizeAngle(targetAngle - this.wanderAngle) * 0.05;
+        } else {
+          targetAngle = this.wanderAngle;
+        }
+      } else {
+        targetAngle = this.wanderAngle;
+      }
     } else {
       // idle: random drift
       if (Math.random() < 0.004) {

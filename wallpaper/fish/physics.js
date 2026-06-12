@@ -226,3 +226,52 @@ export function checkFeeding(fishes, foods, ripples) {
     }
   }
 }
+
+// Resolves pellet-to-pellet collisions: pushes overlapping pellets apart
+// and transfers small velocity impulses to create dynamic pushing behavior.
+export function resolveFoodCollisions(foods) {
+  for (let i = 0; i < foods.length; i++) {
+    for (let j = i + 1; j < foods.length; j++) {
+      const f1 = foods[i];
+      const f2 = foods[j];
+
+      const dx = f2.x - f1.x;
+      const dy = f2.y - f1.y;
+      const distSq = dx * dx + dy * dy;
+      // Add a padding buffer of 4.5px to compensate for independent visual float-drift offsets
+      const minDist = f1.radius + f2.radius + 4.5;
+
+      if (distSq < minDist * minDist) {
+        let dist = Math.sqrt(distSq);
+        let nx, ny;
+        if (dist < 0.1 || isNaN(dist)) {
+          dist = 0.1;
+          // Spawned exactly on top: push in a random direction
+          const angle = Math.random() * Math.PI * 2;
+          nx = Math.cos(angle);
+          ny = Math.sin(angle);
+        } else {
+          nx = dx / dist;
+          ny = dy / dist;
+        }
+
+        const overlap = minDist - dist;
+
+        // Push away from each other
+        f1.x -= nx * overlap * 0.5;
+        f1.y -= ny * overlap * 0.5;
+        f2.x += nx * overlap * 0.5;
+        f2.y += ny * overlap * 0.5;
+
+        // Transfer small velocity impulses in the direction of push
+        if (f1.vx !== undefined && f1.vy !== undefined && f2.vx !== undefined && f2.vy !== undefined) {
+          const pushForce = 0.35;
+          f1.vx -= nx * pushForce;
+          f1.vy -= ny * pushForce;
+          f2.vx += nx * pushForce;
+          f2.vy += ny * pushForce;
+        }
+      }
+    }
+  }
+}
