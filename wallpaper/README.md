@@ -100,7 +100,11 @@ This runs a headless Electron process to render the fish canvas to `build/icon.p
 
 ## 📜 Version History (Changelog)
 
-### **v4.0.0** (Current Version)
+### **v4.0.1** (Current Version)
+*   **Performance & Memory Optimizations**: Added battery-conscious framerate throttling (60fps on AC / 24fps on battery), auto-pause rendering on screen lock, disabled unnecessary speech APIs and software rasterizer, and optimized rendering arrays to reduce garbage-collection overhead.
+*   **Wall Avoidance & Feeding Fixes**: Resolved bugs preventing fish from reaching food close to walls and stopped fish from getting stuck in endless circling loops near the boundaries.
+
+### **v4.0.0**
 *   **Size-Based Speed Scaling**: Adjusted the fish speed range dynamically according to their size. Larger fish swim faster with more power, while smaller fish (and growing babies) swim at slower, gentler speeds.
 *   **Detailed Fish Profiles on Thumbnail Click**: Click any fish thumbnail in the settings panel to open a clean card displaying its name, gender, size, date of birth (DOB), origin details, and full parentage lineage.
 *   **Fish Configuration Sharing**: Added the ability to export and import fish profiles (DNA/configurations) to easily share your custom-bred fish with friends.

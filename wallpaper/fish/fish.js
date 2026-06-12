@@ -150,6 +150,7 @@ export class Fish {
     this.color2 = this.colorParts.body;
     this.tailColor = this.colorParts.tailCenter[0];
     this.finColor = this.colorParts.leftFin;
+    this._thumbnailUrl = null; // Invalidate cached thumbnail
   }
 
   // ============================================================
@@ -1059,15 +1060,50 @@ export class Fish {
     const margin = 120;
     let avoidX = 0,
       avoidY = 0;
-    if (this.x < margin) {
-      avoidX += (margin - this.x) / margin;
-    } else if (this.x > canvas.width - margin) {
-      avoidX -= (this.x - (canvas.width - margin)) / margin;
+
+    let tx, ty;
+    if (this.currentTarget === "mouse") {
+      tx = mouse.x;
+      ty = mouse.y;
+    } else if (this.currentTarget) {
+      tx = this.currentTarget.x;
+      ty = this.currentTarget.y;
     }
+
+    if (this.x < margin) {
+      let force = (margin - this.x) / margin;
+      if (tx !== undefined && tx < this.x) {
+        const targetDist = tx - this.radius;
+        const fishDist = margin - this.radius;
+        force *= Math.max(0, Math.min(1, targetDist / fishDist));
+      }
+      avoidX += force;
+    } else if (this.x > canvas.width - margin) {
+      let force = (this.x - (canvas.width - margin)) / margin;
+      if (tx !== undefined && tx > this.x) {
+        const targetDist = canvas.width - this.radius - tx;
+        const fishDist = margin - this.radius;
+        force *= Math.max(0, Math.min(1, targetDist / fishDist));
+      }
+      avoidX -= force;
+    }
+
     if (this.y < margin) {
-      avoidY += (margin - this.y) / margin;
+      let force = (margin - this.y) / margin;
+      if (ty !== undefined && ty < this.y) {
+        const targetDist = ty - this.radius;
+        const fishDist = margin - this.radius;
+        force *= Math.max(0, Math.min(1, targetDist / fishDist));
+      }
+      avoidY += force;
     } else if (this.y > canvas.height - margin) {
-      avoidY -= (this.y - (canvas.height - margin)) / margin;
+      let force = (this.y - (canvas.height - margin)) / margin;
+      if (ty !== undefined && ty > this.y) {
+        const targetDist = canvas.height - this.radius - ty;
+        const fishDist = margin - this.radius;
+        force *= Math.max(0, Math.min(1, targetDist / fishDist));
+      }
+      avoidY -= force;
     }
 
     const avoidMag = Math.hypot(avoidX, avoidY);
@@ -1156,25 +1192,33 @@ export class Fish {
     // Since we have smart boundary steering, this acts as a robust physical fallback.
     if (this.x - this.radius < 0) {
       this.x = this.radius;
-      this.wanderAngle = 0;
-      this.drawAngle = 0; // Prevent wall jitter by instantly aligning heading!
+      if (!this.currentTarget) {
+        this.wanderAngle = 0;
+        this.drawAngle = 0; // Prevent wall jitter by instantly aligning heading!
+      }
       this.vx = Math.abs(this.vx);
     } else if (this.x + this.radius > canvas.width) {
       this.x = canvas.width - this.radius;
-      this.wanderAngle = Math.PI;
-      this.drawAngle = Math.PI;
+      if (!this.currentTarget) {
+        this.wanderAngle = Math.PI;
+        this.drawAngle = Math.PI;
+      }
       this.vx = -Math.abs(this.vx);
     }
 
     if (this.y - this.radius < 0) {
       this.y = this.radius;
-      this.wanderAngle = Math.PI / 2;
-      this.drawAngle = Math.PI / 2;
+      if (!this.currentTarget) {
+        this.wanderAngle = Math.PI / 2;
+        this.drawAngle = Math.PI / 2;
+      }
       this.vy = Math.abs(this.vy);
     } else if (this.y + this.radius > canvas.height) {
       this.y = canvas.height - this.radius;
-      this.wanderAngle = -Math.PI / 2;
-      this.drawAngle = -Math.PI / 2;
+      if (!this.currentTarget) {
+        this.wanderAngle = -Math.PI / 2;
+        this.drawAngle = -Math.PI / 2;
+      }
       this.vy = -Math.abs(this.vy);
     }
   }

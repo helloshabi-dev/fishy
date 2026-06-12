@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openProfilesFolder: () => ipcRenderer.send('open-profiles-folder'),
   saveProfileFile: (profile) => ipcRenderer.invoke('save-profile-file', profile),
   deleteProfileFile: (id) => ipcRenderer.invoke('delete-profile-file', id),
-  loadProfileFiles: () => ipcRenderer.invoke('load-profile-files')
+  loadProfileFiles: () => ipcRenderer.invoke('load-profile-files'),
+  onPowerStateChange: (callback) => ipcRenderer.on('power-state-change', (event, data) => callback(data))
 });
 

@@ -11,6 +11,7 @@ import { resolveCollisions, checkFeeding, resolveFoodCollisions } from './physic
 
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
+const resolutionScale = 0.75; // 75% resolution throttle to save GPU and memory overhead
 
 // ============================================================
 // SETTINGS STATE & LOCALSTORAGE PERSISTENCE
@@ -209,9 +210,19 @@ function saveFishProfiles() {
 }
 
 // Renders the per-fish color, name, visibility, size + delete controls in the settings panel
+let _fishListDirty = false;
 function renderFishList() {
   const container = document.getElementById('fish-list');
   if (!container) return;
+
+  // Skip expensive DOM rebuild if settings panel is not visible — just mark dirty
+  const panel = document.getElementById('settings-panel');
+  if (panel && !panel.classList.contains('open')) {
+    _fishListDirty = true;
+    return;
+  }
+  _fishListDirty = false;
+
   container.innerHTML = '';
 
   fishes.forEach((fish, i) => {
@@ -241,16 +252,18 @@ function renderFishList() {
     colorInput.addEventListener('input', (e) => {
       e.stopPropagation();
       const newColor = e.target.value;
-      fish.updateColor(newColor);
+      fish.updateColor(newColor); // This sets fish._thumbnailUrl = null
       swatch.style.backgroundColor = newColor;
-      thumbnail.src = renderFishPreview(fish.colorParts, 14);
+      fish._thumbnailUrl = renderFishPreview(fish.colorParts, 14);
+      thumbnail.src = fish._thumbnailUrl;
       saveFishProfiles();
     });
 
-    // Thumbnail preview
+    // Thumbnail preview (reuse cached snapshot if color hasn't changed)
     const thumbnail = document.createElement('img');
     thumbnail.className = 'settings-fish-thumbnail';
-    thumbnail.src = renderFishPreview(fish.colorParts, 14);
+    if (!fish._thumbnailUrl) fish._thumbnailUrl = renderFishPreview(fish.colorParts, 14);
+    thumbnail.src = fish._thumbnailUrl;
     thumbnail.title = 'Click to view fish profile details';
     thumbnail.style.cursor = 'pointer';
     thumbnail.addEventListener('click', (e) => {
@@ -426,10 +439,11 @@ function renderFishList() {
         const row = document.createElement('div');
         row.className = 'fish-item-row';
 
-        // Static fish preview thumbnail
+        // Static fish preview thumbnail (reuse cached snapshot)
         const thumbnail = document.createElement('img');
         thumbnail.className = 'settings-fish-thumbnail';
-        thumbnail.src = renderFishPreview(p.color, 14);
+        if (!p._thumbnailUrl) p._thumbnailUrl = renderFishPreview(p.color, 14);
+        thumbnail.src = p._thumbnailUrl;
         thumbnail.alt = 'Fish thumbnail';
         thumbnail.style.cursor = 'pointer';
         thumbnail.title = 'Click to view fish profile details';
@@ -538,6 +552,18 @@ function renderFishList() {
       inactiveList.innerHTML = '';
     }
   }
+}
+
+// Debounced version of renderFishList — coalesces rapid calls within a single animation frame
+// to prevent DOM thrashing from continuous slider/input events
+let _renderFishListPending = false;
+function scheduleRenderFishList() {
+  if (_renderFishListPending) return;
+  _renderFishListPending = true;
+  requestAnimationFrame(() => {
+    _renderFishListPending = false;
+    renderFishList();
+  });
 }
 
 // Initialize settings panel controls to match the persisted settings
@@ -673,7 +699,7 @@ function adjustFishCount(targetCount) {
     }
   }
   saveFishProfiles();
-  renderFishList();
+  scheduleRenderFishList();
 }
 
 // Setup Settings UI Listeners
@@ -695,6 +721,10 @@ function initSettingsUI() {
   let togglePanel = function() {
     panel.classList.toggle("open");
     toggleBtn.classList.toggle("active");
+    // Rebuild fish list if it was updated while the panel was closed
+    if (_fishListDirty && panel.classList.contains("open")) {
+      renderFishList();
+    }
   }
 
   toggleBtn.addEventListener("click", (e) => {
@@ -721,7 +751,7 @@ function initSettingsUI() {
       }
     });
     saveFishProfiles();
-    renderFishList();
+    scheduleRenderFishList();
   });
 
   // Fish Count slider listener
@@ -779,7 +809,7 @@ function initSettingsUI() {
       }
     });
     saveFishProfiles();
-    renderFishList();
+    scheduleRenderFishList();
   }
 
   // Add Fish Button
@@ -895,19 +925,28 @@ function initSettingsUI() {
     let lastIgnoreState = true;
 
     // Helper to dynamically update window ignore mouse state
-    updateIgnoreMouseEvents = () => {
+    updateIgnoreMouseEvents = (rawX = null, rawY = null) => {
+      if (rawX === null || rawY === null) {
+        if (mouse.x !== undefined && mouse.y !== undefined) {
+          rawX = mouse.x / resolutionScale;
+          rawY = mouse.y / resolutionScale;
+        } else {
+          rawX = -99999;
+          rawY = -99999;
+        }
+      }
       const isPanelOpen = panel.classList.contains("open");
       const isOverGear = (
-        mouse.x >= window.innerWidth - 64 &&
-        mouse.x <= window.innerWidth - 20 &&
-        mouse.y >= 20 &&
-        mouse.y <= 64
+        rawX >= window.innerWidth - 64 &&
+        rawX <= window.innerWidth - 20 &&
+        rawY >= 20 &&
+        rawY <= 64
       );
       const isOverPanel = isPanelOpen && (
-        mouse.x >= window.innerWidth - 330 &&
-        mouse.x <= window.innerWidth - 20 &&
-        mouse.y >= 80 &&
-        mouse.y <= 80 + panel.offsetHeight
+        rawX >= window.innerWidth - 330 &&
+        rawX <= window.innerWidth - 20 &&
+        rawY >= 80 &&
+        rawY <= 80 + panel.offsetHeight
       );
 
       let desiredIgnore = true;
@@ -933,10 +972,11 @@ function initSettingsUI() {
     // Track global cursor positions and dynamically toggle click-through when hovering the Gear or Settings Panel
     window.electronAPI.onGlobalMouseMove((data) => {
       // Update global mouse coordinates so the fishes smoothly watch/follow the cursor
-      mouse.x = data.x;
-      mouse.y = data.y;
+      // Scale by resolutionScale for canvas space
+      mouse.x = data.x * resolutionScale;
+      mouse.y = data.y * resolutionScale;
 
-      updateIgnoreMouseEvents();
+      updateIgnoreMouseEvents(data.x, data.y);
     });
 
     // Listen for the OS-level global hotkey Cmd+Alt+S / Ctrl+Alt+S to toggle settings panel
@@ -1025,14 +1065,14 @@ document.body.style.padding = "0";
 document.body.style.overflow = "hidden";
 applyBackgroundSettings(); // Apply persisted background settings
 
-// Set canvas to full screen
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// Set canvas to full screen (throttled by resolutionScale to reduce memory/GPU overhead)
+canvas.width = window.innerWidth * resolutionScale;
+canvas.height = window.innerHeight * resolutionScale;
 
 // Handle window resizing smoothly
 window.addEventListener("resize", function () {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = window.innerWidth * resolutionScale;
+  canvas.height = window.innerHeight * resolutionScale;
   init();
 });
 
@@ -1109,7 +1149,26 @@ function makeFishColorGrid(colorParts) {
   return grid;
 }
 
+// Thumbnail preview cache — avoids re-creating canvases and Fish objects for unchanged color combos
+const _previewCache = new Map();
+
+function _previewCacheKey(colorParts, displayRadius) {
+  const p = [
+    colorParts.head, colorParts.body, colorParts.s1, colorParts.s2,
+    colorParts.leftFin, colorParts.rightFin
+  ];
+  for (const lobe of ['tailLeft', 'tailCenter', 'tailRight']) {
+    const arr = Array.isArray(colorParts[lobe]) ? colorParts[lobe] : [colorParts[lobe]];
+    for (let i = 0; i < arr.length; i++) p.push(arr[i]);
+  }
+  p.push(displayRadius);
+  return p.join('|');
+}
+
 function renderFishPreview(colorParts, displayRadius = 24) {
+  const cacheKey = _previewCacheKey(colorParts, displayRadius);
+  const cached = _previewCache.get(cacheKey);
+  if (cached) return cached;
   const scale = 4.0;
   const renderRadius = displayRadius * scale;
   const W = Math.round(64 * scale);
@@ -1147,7 +1206,14 @@ function renderFishPreview(colorParts, displayRadius = 24) {
   tempFish.smoothTurnRate = 0;
 
   tempFish.draw(pctx, false);
-  return cvs.toDataURL();
+  const dataUrl = cvs.toDataURL();
+
+  // Store in cache; evict oldest entry if cache grows too large
+  _previewCache.set(cacheKey, dataUrl);
+  if (_previewCache.size > 50) {
+    _previewCache.delete(_previewCache.keys().next().value);
+  }
+  return dataUrl;
 }
 
 function makeCompactColorRow(colorParts) {
@@ -1646,6 +1712,7 @@ let fishes = [];
 let foods = [];
 let ripples = [];
 let heartParticles = [];
+let _visibleFishes = []; // Reusable array to avoid per-frame allocation in animate()
 
 // ============================================================
 // MOUSE TRACKING
@@ -1661,8 +1728,8 @@ let mouseLastY = undefined;
 let mouseIdleFrames = 0;
 
 window.addEventListener("mousemove", function (event) {
-  mouse.x = event.clientX;
-  mouse.y = event.clientY;
+  mouse.x = event.clientX * resolutionScale;
+  mouse.y = event.clientY * resolutionScale;
 });
 
 // Clear mouse when cursor leaves the window
@@ -1676,13 +1743,16 @@ window.addEventListener("mouseout", function () {
 // ============================================================
 
 window.addEventListener("click", function (event) {
+  const scaledX = event.clientX * resolutionScale;
+  const scaledY = event.clientY * resolutionScale;
+
   // Spawn ripple
-  ripples.push(new Ripple(event.clientX, event.clientY));
+  ripples.push(new Ripple(scaledX, scaledY));
 
   // Spawn food pellet that floats gently in place
   foods.push({
-    x: event.clientX,
-    y: event.clientY,
+    x: scaledX,
+    y: scaledY,
     vx: 0,
     vy: 0,
     radius: 2,
@@ -1728,8 +1798,38 @@ function init() {
 // ANIMATE — main loop
 // ============================================================
 
+let isOnBattery = false;
+let isLocked = false;
+let lastFrameTime = performance.now();
+
+if (window.electronAPI && window.electronAPI.onPowerStateChange) {
+  window.electronAPI.onPowerStateChange((data) => {
+    isOnBattery = !!data.isOnBattery;
+    isLocked = !!data.isLocked;
+  });
+}
+
 function animate() {
   requestAnimationFrame(animate);
+
+  if (isLocked) {
+    return; // Stop rendering completely when screen is locked
+  }
+
+  const now = performance.now();
+  const elapsed = now - lastFrameTime;
+
+  // Max 60 FPS on AC power to limit resource waste on high refresh rate (120Hz+) screens.
+  // Max 24 FPS on battery power to conserve battery life.
+  const targetFps = isOnBattery ? 24 : 60;
+  const frameMinTime = 1000 / targetFps;
+
+  if (elapsed < frameMinTime - 1) {
+    return; // Skip drawing to throttle frame rate
+  }
+
+  // Adjust frame window, preserving timing precision
+  lastFrameTime = now - (elapsed % frameMinTime);
 
   // Update mouse stationary idle frames
   if (mouse.x === mouseLastX && mouse.y === mouseLastY) {
@@ -1747,7 +1847,10 @@ function animate() {
   for (let i = ripples.length - 1; i >= 0; i--) {
     ripples[i].update();
     ripples[i].draw(ctx);
-    if (ripples[i].alpha <= 0) ripples.splice(i, 1);
+    if (ripples[i].alpha <= 0) {
+      ripples[i] = ripples[ripples.length - 1];
+      ripples.pop();
+    }
   }
 
   // 3. Update and draw floating food pellets
@@ -1797,18 +1900,22 @@ function animate() {
     ctx.restore();
   }
 
-  // 4. Resolve physics & feeding
-  const visibleFishes = fishes.filter(f => f.visible !== false);
-  resolveCollisions(visibleFishes, fishes.length < settings.maxCapacity);
+  // 4. Resolve physics & feeding (reuse array to avoid per-frame allocation)
+  _visibleFishes.length = 0;
+  for (let i = 0; i < fishes.length; i++) {
+    if (fishes[i].visible !== false) _visibleFishes.push(fishes[i]);
+  }
+  resolveCollisions(_visibleFishes, fishes.length < settings.maxCapacity);
   resolveFoodCollisions(foods);
-  checkFeeding(visibleFishes, foods, ripples);
+  checkFeeding(_visibleFishes, foods, ripples);
 
-  // 4b. Update and draw heart particles
+  // 4b. Update and draw heart particles (swap-and-pop avoids shifting the array)
   for (let i = heartParticles.length - 1; i >= 0; i--) {
     heartParticles[i].update();
     heartParticles[i].draw(ctx);
     if (heartParticles[i].alpha <= 0) {
-      heartParticles.splice(i, 1);
+      heartParticles[i] = heartParticles[heartParticles.length - 1];
+      heartParticles.pop();
     }
   }
 
@@ -2008,7 +2115,7 @@ async function loadAndSyncProfilesFromFolder() {
         }
       });
 
-      renderFishList();
+      scheduleRenderFishList();
     }
   }
 }

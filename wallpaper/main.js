@@ -1,6 +1,10 @@
-const { app, BrowserWindow, screen, globalShortcut, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, screen, globalShortcut, ipcMain, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+// Optimize memory usage by disabling unnecessary Chromium subsystems
+app.commandLine.appendSwitch('disable-speech-api');
+app.commandLine.appendSwitch('disable-software-rasterizer');
 
 let mainWindow;
 
@@ -52,6 +56,18 @@ function createWallpaperWindow() {
 
   // Load the index.html from our local build
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    // Send initial power state to trigger throttling / pause early if needed
+    let isLocked = false;
+    try {
+      isLocked = powerMonitor.isLockedScreen();
+    } catch (e) {}
+    mainWindow.webContents.send('power-state-change', {
+      isOnBattery: powerMonitor.isOnBatteryPower(),
+      isLocked: isLocked
+    });
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -232,6 +248,27 @@ app.whenReady().then(() => {
       mainWindow.webContents.send('toggle-settings-global');
     }
   });
+
+  // Track power state and dispatch to renderer to adjust performance dynamically
+  const sendPowerState = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      let isLocked = false;
+      try {
+        isLocked = powerMonitor.isLockedScreen();
+      } catch (e) {}
+      mainWindow.webContents.send('power-state-change', {
+        isOnBattery: powerMonitor.isOnBatteryPower(),
+        isLocked: isLocked
+      });
+    }
+  };
+
+  powerMonitor.on('on-battery', sendPowerState);
+  powerMonitor.on('on-ac', sendPowerState);
+  powerMonitor.on('lock-screen', sendPowerState);
+  powerMonitor.on('unlock-screen', sendPowerState);
+  powerMonitor.on('suspend', sendPowerState);
+  powerMonitor.on('resume', sendPowerState);
 
 
   app.on('activate', () => {
