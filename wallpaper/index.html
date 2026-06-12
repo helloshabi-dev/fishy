@@ -311,6 +311,19 @@
         transition: transform 0.15s ease, box-shadow 0.15s ease;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
       }
+      .settings-fish-thumbnail {
+        width: 28px;
+        height: 28px;
+        object-fit: cover;
+        border-radius: 50%;
+        display: block;
+        flex-shrink: 0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .settings-fish-thumbnail:hover {
+        transform: scale(1.15);
+      }
       .fish-color-swatch:hover { transform: scale(1.22); }
       .fish-color-input-hidden {
         position: absolute;
@@ -565,12 +578,12 @@
         background: rgba(255,255,255,0.04);
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 12px;
-        padding: 9px 11px 9px 9px;
+        padding: 0;
         transition: border-color 0.2s;
         display: flex;
         flex-direction: row;
-        gap: 10px;
-        align-items: flex-start;
+        gap: 16px;
+        align-items: stretch;
       }
       .ft-tree-card:hover {
         border-color: rgba(255,255,255,0.15);
@@ -580,7 +593,6 @@
         border-color: rgba(240, 101, 78, 0.4);
         background: rgba(240, 101, 78, 0.07);
         box-shadow: 0 0 18px rgba(240, 101, 78, 0.12);
-        padding: 11px 13px 11px 10px;
       }
       /* Parent card */
       .ft-tree-card--parent {
@@ -592,25 +604,29 @@
         border-color: rgba(255,255,255,0.05);
       }
 
-      /* LEFT: fish preview thumbnail */
-      .ft-fish-preview {
-        width: 88px;
-        height: 52px;
-        object-fit: contain;
-        border-radius: 8px;
-        background: rgba(7, 17, 30, 0.55);
+      .ft-fish-preview-container {
+        align-self: stretch;
+        border-radius: 11px 0 0 11px;
         display: block;
         flex-shrink: 0;
-        border: 1px solid rgba(255,255,255,0.06);
-        align-self: center;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.02);
+        position: relative;
       }
-      .ft-tree-card--parent .ft-fish-preview {
-        width: 74px;
-        height: 44px;
+      .ft-fish-preview {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
       }
-      .ft-tree-card--ancestor .ft-fish-preview {
-        width: 60px;
-        height: 36px;
+      .ft-tree-card--parent .ft-fish-preview-container {
+        /* Inherits stretching layout */
+      }
+      .ft-tree-card--ancestor .ft-fish-preview-container {
+        /* Inherits stretching layout */
       }
 
       /* RIGHT: content body */
@@ -620,7 +636,10 @@
         display: flex;
         flex-direction: column;
         gap: 5px;
-        align-self: center;
+        padding: 9px 11px 9px 0;
+      }
+      .ft-tree-card--root .ft-tree-card-body {
+        padding: 11px 13px 11px 0;
       }
 
       /* Card header row */
@@ -749,6 +768,15 @@
             <span class="control-value" id="fish-count-value">2</span>
           </div>
           <input type="range" id="fish-count-slider" class="range-slider" min="1" max="15" value="2" />
+        </div>
+
+        <!-- Max Capacity (Breeding Limit) -->
+        <div class="control-group">
+          <div class="control-label">
+            <span>Max Capacity</span>
+            <span class="control-value" id="fish-capacity-value">10</span>
+          </div>
+          <input type="range" id="fish-capacity-slider" class="range-slider" min="1" max="15" value="7" />
         </div>
 
         <!-- Fish Color Presets -->

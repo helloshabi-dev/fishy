@@ -18,21 +18,25 @@ const ctx = canvas.getContext("2d");
 
 let updateIgnoreMouseEvents = null;
 const storedProfiles = JSON.parse(localStorage.getItem('fishy_fishProfiles') || '[]');
-const namedProfiles = storedProfiles.filter(p => p.name && p.name.trim() !== '');
-const activeNamedCount = namedProfiles.filter(p => p.active !== false).length;
+const initialProfiles = storedProfiles.filter(p => p.active !== false || (p.name && p.name.trim() !== ''));
+const activeProfiles = initialProfiles.filter(p => p.active !== false);
 const storedCount = parseInt(localStorage.getItem("fishy_fishCount") || "2");
-const storedVisibleUnnamed = localStorage.getItem('fishy_visibleUnnamedCount');
-const visibleUnnamedCount = storedVisibleUnnamed !== null ? parseInt(storedVisibleUnnamed) : Math.max(0, storedCount - activeNamedCount);
+const fishCount = activeProfiles.length > 0 ? activeProfiles.length : storedCount;
+const visibleUnnamedCount = activeProfiles.length > 0 ? activeProfiles.filter(p => !p.name || p.name.trim() === '').length : fishCount;
+
+const storedCapacity = parseInt(localStorage.getItem("fishy_maxCapacity") || "10");
+const maxCapacity = Math.max(fishCount, storedCapacity);
 
 const settings = {
   fishSize: parseInt(localStorage.getItem("fishy_fishSize") || "12"), // default is 12px
-  fishCount: activeNamedCount + visibleUnnamedCount, // total count
+  fishCount: fishCount, // total count
+  maxCapacity: maxCapacity, // breeding capacity
   fishColor: localStorage.getItem("fishy_fishColor") || "#f0654e",
   bgOpacity: parseInt(localStorage.getItem("fishy_bgOpacity") || "50"), // default background opacity is 50%
   bgColor: localStorage.getItem("fishy_bgColor") || "#07111e",
   autoStart: localStorage.getItem("fishy_autoStart") !== "false", // default is true (autostart enabled)
   feedingMode: localStorage.getItem("fishy_feedingMode") === "true", // default is false (don't intercept clicks by default)
-  fishProfiles: namedProfiles,
+  fishProfiles: initialProfiles,
   visibleUnnamedCount: visibleUnnamedCount
 };
 
@@ -80,9 +84,7 @@ function getRandomSpawnPos(maxAttempts = 150) {
 }
 
 function saveFishProfiles() {
-  const activeNamedOrBredFishes = fishes.filter(fish => (fish.name && fish.name.trim() !== '') || fish.isBred);
-
-  const activeProfiles = activeNamedOrBredFishes.map(fish => ({
+  const activeProfiles = fishes.map(fish => ({
     id: fish.id,
     name: (fish.name || '').trim(),
     color: fish.colorParts || fish.color1,
@@ -102,26 +104,25 @@ function saveFishProfiles() {
   let mergedProfiles = settings.fishProfiles.map(p => {
     const activeFish = fishes.find(f => f.id === p.id);
     if (activeFish) {
-      if ((activeFish.name && activeFish.name.trim() !== '') || activeFish.isBred) {
-        return {
-          id: activeFish.id,
-          name: (activeFish.name || '').trim(),
-          color: activeFish.colorParts || activeFish.color1,
-          size: activeFish.radius,
-          visible: activeFish.visible !== false,
-          active: true,
-          gender: activeFish.gender,
-          breedingEnabled: activeFish.breedingEnabled,
-          isBred: activeFish.isBred,
-          isMature: activeFish.isMature,
-          birthTime: activeFish.birthTime,
-          targetRadius: activeFish.targetRadius,
-          parentInfo: activeFish.parentInfo || null
-        };
-      } else {
-        // Name cleared and not bred, discard profile
-        return null;
-      }
+      return {
+        id: activeFish.id,
+        name: (activeFish.name || '').trim(),
+        color: activeFish.colorParts || activeFish.color1,
+        size: activeFish.radius,
+        visible: activeFish.visible !== false,
+        active: true,
+        gender: activeFish.gender,
+        breedingEnabled: activeFish.breedingEnabled,
+        isBred: activeFish.isBred,
+        isMature: activeFish.isMature,
+        birthTime: activeFish.birthTime,
+        targetRadius: activeFish.targetRadius,
+        parentInfo: activeFish.parentInfo || null
+      };
+    }
+    // Discard inactive unnamed profiles
+    if (!p.name || p.name.trim() === '') {
+      return null;
     }
     return { ...p, active: false };
   });
@@ -136,30 +137,12 @@ function saveFishProfiles() {
     }
   });
 
-  // Filter out any invalid profiles (must have name or be bred)
-  mergedProfiles = mergedProfiles.filter(p => (p.name && p.name.trim() !== '') || p.isBred);
-
   settings.fishProfiles = mergedProfiles;
   localStorage.setItem('fishy_fishProfiles', JSON.stringify(mergedProfiles));
 
   const visibleUnnamedCount = fishes.filter(fish => (!fish.name || fish.name.trim() === '') && fish.visible !== false).length;
   settings.visibleUnnamedCount = visibleUnnamedCount;
   localStorage.setItem('fishy_visibleUnnamedCount', visibleUnnamedCount);
-
-  if (fishes.length > settings.fishCount) {
-    settings.fishCount = fishes.length;
-    localStorage.setItem('fishy_fishCount', settings.fishCount);
-
-    // Sync count UI
-    const countSlider = document.getElementById("fish-count-slider");
-    const countVal = document.getElementById("fish-count-value");
-    if (countSlider) {
-      countSlider.value = settings.fishCount;
-    }
-    if (countVal) {
-      countVal.textContent = settings.fishCount;
-    }
-  }
 }
 
 // Renders the per-fish color, name, visibility, size + delete controls in the settings panel
@@ -197,7 +180,19 @@ function renderFishList() {
       const newColor = e.target.value;
       fish.updateColor(newColor);
       swatch.style.backgroundColor = newColor;
+      thumbnail.src = renderFishPreview(fish.colorParts, 14);
       saveFishProfiles();
+    });
+
+    // Thumbnail preview
+    const thumbnail = document.createElement('img');
+    thumbnail.className = 'settings-fish-thumbnail';
+    thumbnail.src = renderFishPreview(fish.colorParts, 14);
+    thumbnail.title = 'Click thumbnail or swatch to change color';
+    thumbnail.style.cursor = 'pointer';
+    thumbnail.addEventListener('click', (e) => {
+      e.stopPropagation();
+      colorInput.click();
     });
 
     // Name Input
@@ -259,36 +254,6 @@ function renderFishList() {
       renderFishList();
     });
 
-    // Show/Hide Toggle Button
-    const showHideBtn = document.createElement('button');
-    showHideBtn.type = 'button';
-    showHideBtn.className = 'fish-action-btn show-hide-btn';
-    if (fish.visible === false) {
-      showHideBtn.classList.add('muted');
-      showHideBtn.title = 'Show Fish';
-      showHideBtn.innerHTML = `
-        <svg class="fish-action-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-          <line x1="1" y1="1" x2="23" y2="23"></line>
-        </svg>
-      `;
-    } else {
-      showHideBtn.title = 'Hide Fish';
-      showHideBtn.innerHTML = `
-        <svg class="fish-action-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-          <circle cx="12" cy="12" r="3"></circle>
-        </svg>
-      `;
-    }
-
-    showHideBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      fish.visible = fish.visible !== false ? false : true;
-      saveFishProfiles();
-      renderFishList();
-    });
-
     // Delete Button
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -310,6 +275,8 @@ function renderFishList() {
       renderFishList();
     });
 
+    row1.appendChild(thumbnail);
+
     // Family Tree Button — only shown for bred fish
     if (fish.isBred && fish.parentInfo) {
       const treeBtn = document.createElement('button');
@@ -319,7 +286,14 @@ function renderFishList() {
       treeBtn.style.display = 'flex';
       treeBtn.style.alignItems = 'center';
       treeBtn.style.justifyContent = 'center';
-      treeBtn.innerHTML = '🌳';
+      treeBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="5" r="3"></circle>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="18" r="3"></circle>
+          <path d="M12 8v4M6 18v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      `;
       treeBtn.title = 'View Family Tree';
       treeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -333,7 +307,6 @@ function renderFishList() {
     row1.appendChild(nameInput);
     row1.appendChild(genderBtn);
     row1.appendChild(breedingBtn);
-    row1.appendChild(showHideBtn);
     row1.appendChild(deleteBtn);
 
     // Row 2: Size Slider
@@ -358,7 +331,7 @@ function renderFishList() {
     sizeValEl.className = 'fish-size-val';
     sizeValEl.style.minWidth = '32px';
     sizeValEl.style.textAlign = 'right';
-    sizeValEl.textContent = fish.radius + 'px';
+    sizeValEl.textContent = fish.radius.toFixed(2) + 'px';
 
     sizeSliderEl.addEventListener('input', (e) => {
       e.stopPropagation();
@@ -368,7 +341,7 @@ function renderFishList() {
       if (!fish.isMature) {
         fish.isMature = true;
       }
-      sizeValEl.textContent = newSize + 'px';
+      sizeValEl.textContent = newSize.toFixed(2) + 'px';
       saveFishProfiles();
     });
 
@@ -396,11 +369,12 @@ function renderFishList() {
         const row = document.createElement('div');
         row.className = 'fish-item-row';
 
-        // Static color swatch
-        const swatch = document.createElement('div');
-        swatch.className = 'fish-color-swatch';
-        swatch.style.backgroundColor = p.color && typeof p.color === 'object' ? p.color.body : p.color;
-        swatch.style.cursor = 'default';
+        // Static fish preview thumbnail
+        const thumbnail = document.createElement('img');
+        thumbnail.className = 'settings-fish-thumbnail';
+        thumbnail.src = renderFishPreview(p.color, 14);
+        thumbnail.alt = 'Fish thumbnail';
+        thumbnail.style.cursor = 'default';
 
         // Static name label
         const nameLabel = document.createElement('span');
@@ -409,6 +383,20 @@ function renderFishList() {
         nameLabel.style.color = 'var(--text-main)';
         nameLabel.style.flex = '1';
         nameLabel.textContent = p.name;
+
+        // Static gender symbol next to the name
+        const genderSpan = document.createElement('span');
+        genderSpan.style.fontSize = '0.85rem';
+        genderSpan.style.fontWeight = 'bold';
+        if (p.gender === 'male') {
+          genderSpan.textContent = '♂';
+          genderSpan.style.color = '#60a5fa';
+          genderSpan.title = 'Gender: Male';
+        } else {
+          genderSpan.textContent = '♀';
+          genderSpan.style.color = '#f472b6';
+          genderSpan.title = 'Gender: Female';
+        }
 
         // Add to Pond Button
         const addBtn = document.createElement('button');
@@ -451,8 +439,35 @@ function renderFishList() {
           renderFishList();
         });
 
-        row.appendChild(swatch);
+        row.appendChild(thumbnail);
         row.appendChild(nameLabel);
+        row.appendChild(genderSpan);
+
+        // Family Tree Button — shown for bred saved fish
+        if (p.isBred && p.parentInfo) {
+          const treeBtn = document.createElement('button');
+          treeBtn.type = 'button';
+          treeBtn.className = 'fish-action-btn';
+          treeBtn.style.fontSize = '0.88rem';
+          treeBtn.style.display = 'flex';
+          treeBtn.style.alignItems = 'center';
+          treeBtn.style.justifyContent = 'center';
+          treeBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="5" r="3"></circle>
+              <circle cx="6" cy="18" r="3"></circle>
+              <circle cx="18" cy="18" r="3"></circle>
+              <path d="M12 8v4M6 18v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          `;
+          treeBtn.title = 'View Family Tree';
+          treeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFamilyTree(p);
+          });
+          row.appendChild(treeBtn);
+        }
+
         row.appendChild(addBtn);
         row.appendChild(deleteBtn);
         item.appendChild(row);
@@ -478,12 +493,19 @@ function syncSettingsUI() {
 
   if (sizeSlider) {
     sizeSlider.value = settings.fishSize;
-    if (sizeVal) sizeVal.textContent = settings.fishSize + "px";
+    if (sizeVal) sizeVal.textContent = parseFloat(settings.fishSize).toFixed(2) + "px";
   }
 
   if (countSlider) {
     countSlider.value = settings.fishCount;
     if (countVal) countVal.textContent = settings.fishCount;
+  }
+  
+  const capacitySlider = document.getElementById("fish-capacity-slider");
+  const capacityVal = document.getElementById("fish-capacity-value");
+  if (capacitySlider) {
+    capacitySlider.value = settings.maxCapacity;
+    if (capacityVal) capacityVal.textContent = settings.maxCapacity;
   }
   
   if (opacitySlider) {
@@ -579,6 +601,8 @@ function initSettingsUI() {
   const sizeVal = document.getElementById("fish-size-value");
   const countSlider = document.getElementById("fish-count-slider");
   const countVal = document.getElementById("fish-count-value");
+  const capacitySlider = document.getElementById("fish-capacity-slider");
+  const capacityVal = document.getElementById("fish-capacity-value");
   const opacitySlider = document.getElementById("bg-opacity-slider");
   const opacityVal = document.getElementById("bg-opacity-value");
   const fishColorPicker = document.getElementById("fish-color-picker");
@@ -604,7 +628,7 @@ function initSettingsUI() {
   sizeSlider.addEventListener("input", (e) => {
     const size = parseInt(e.target.value);
     settings.fishSize = size;
-    sizeVal.textContent = size + "px";
+    sizeVal.textContent = size.toFixed(2) + "px";
     localStorage.setItem("fishy_fishSize", size);
     fishes.forEach((fish) => {
       const isNamed = fish.name && fish.name.trim() !== '';
@@ -625,6 +649,16 @@ function initSettingsUI() {
     localStorage.setItem("fishy_fishCount", count);
     adjustFishCount(count);
   });
+
+  // Max Capacity slider listener
+  if (capacitySlider) {
+    capacitySlider.addEventListener("input", (e) => {
+      const capacity = parseInt(e.target.value);
+      settings.maxCapacity = capacity;
+      capacityVal.textContent = capacity;
+      localStorage.setItem("fishy_maxCapacity", capacity);
+    });
+  }
 
   // Preset fish colors
   document.querySelectorAll("#fish-color-presets .color-preset").forEach(btn => {
@@ -930,33 +964,34 @@ function makeFishColorGrid(colorParts) {
   return grid;
 }
 
-function renderFishPreview(colorParts, displayRadius = 15) {
-  const W = 130, H = 74;
+function renderFishPreview(colorParts, displayRadius = 24) {
+  const scale = 4.0;
+  const renderRadius = displayRadius * scale;
+  const W = Math.round(64 * scale);
+  const H = Math.round(104 * scale);
   const cvs = document.createElement('canvas');
   cvs.width = W;
   cvs.height = H;
   const pctx = cvs.getContext('2d');
 
-  // Transparent dark background
-  pctx.fillStyle = 'rgba(7,17,30,0.55)';
-  pctx.fillRect(0, 0, W, H);
+  // No background - keep transparent
 
-  // Build a temporary Fish at the canvas center with stable drawing state
+  const centerY = Math.round(H / 2 - 0.815 * renderRadius);
   const tempFish = new Fish(
-    W / 2 - 6, H / 2,    // x, y — slightly left of center so head’s not clipped
+    W / 2, centerY,    // x, y — dynamically centered based on renderRadius
     0, 0,
-    displayRadius,
+    renderRadius,
     colorParts,
-    '', true, null, 'female', false, false, true, null, displayRadius
+    '', true, null, 'female', false, false, true, null, renderRadius
   );
 
-  // Force a clean, straight, non-wiggling pose
-  tempFish.drawAngle = 0;   // facing right
-  tempFish.prevAngle = 0;
-  tempFish.angle1 = 0; tempFish.angle2 = 0; tempFish.angle2b = 0;
-  tempFish.angle3 = Math.PI; tempFish.angle4 = Math.PI;
-  tempFish.angle5 = Math.PI; tempFish.angle6 = Math.PI;
-  tempFish.tailWorldAngle = Math.PI;
+  // Force a clean, straight, non-wiggling pose facing up
+  tempFish.drawAngle = -Math.PI / 2;   // facing up
+  tempFish.prevAngle = -Math.PI / 2;
+  tempFish.angle1 = -Math.PI / 2; tempFish.angle2 = -Math.PI / 2; tempFish.angle2b = -Math.PI / 2;
+  tempFish.angle3 = -Math.PI / 2 + Math.PI; tempFish.angle4 = -Math.PI / 2 + Math.PI;
+  tempFish.angle5 = -Math.PI / 2 + Math.PI; tempFish.angle6 = -Math.PI / 2 + Math.PI;
+  tempFish.tailWorldAngle = -Math.PI / 2 + Math.PI;
   tempFish.wiggleCycle = 0;
   tempFish.smoothAmpFactor = 0;
   tempFish.currentSpeed = 0;
@@ -1015,13 +1050,16 @@ function buildFamilyTreeNode(data, depth, side) {
   else if (depth === 1) card.classList.add('ft-tree-card--parent');
   else card.classList.add('ft-tree-card--ancestor');
 
-  // LEFT: fish preview thumbnail
-  const previewSrc = renderFishPreview(data.colorParts);
+  // LEFT: fish preview thumbnail wrapped in a square container
+  const previewSrc = renderFishPreview(data.colorParts, 24);
+  const imgContainer = document.createElement('div');
+  imgContainer.className = 'ft-fish-preview-container';
   const fishImg = document.createElement('img');
   fishImg.src = previewSrc;
   fishImg.className = 'ft-fish-preview';
   fishImg.alt = (data.name || 'Fish') + ' preview';
-  card.appendChild(fishImg);
+  imgContainer.appendChild(fishImg);
+  card.appendChild(imgContainer);
 
   // RIGHT: content body (header + color info)
   const cardBody = document.createElement('div');
@@ -1087,6 +1125,11 @@ function buildFamilyTreeNode(data, depth, side) {
       childrenEl.style.display = isCollapsed ? '' : 'none';
       toggleBtn.textContent = isCollapsed ? '▾' : '▸';
       toggleBtn.title = isCollapsed ? 'Hide ancestors' : 'Show ancestors';
+      if (isCollapsed) {
+        requestAnimationFrame(() => {
+          adjustTreeThumbnails(childrenEl);
+        });
+      }
     });
     header.appendChild(toggleBtn); // safe to append even after header is in DOM
 
@@ -1096,7 +1139,28 @@ function buildFamilyTreeNode(data, depth, side) {
   return item;
 }
 
-function openFamilyTree(fish) {
+function adjustTreeThumbnails(rootEl) {
+  const cards = rootEl.querySelectorAll('.ft-tree-card');
+  cards.forEach(card => {
+    const container = card.querySelector('.ft-fish-preview-container');
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      if (containerRect.height > 0) {
+        container.style.width = containerRect.height + 'px';
+      }
+    }
+  });
+}
+
+// Re-adjust thumbnail widths on resize if family tree overlay is open
+window.addEventListener('resize', () => {
+  const overlay = document.getElementById('family-tree-overlay');
+  if (overlay && overlay.classList.contains('open')) {
+    adjustTreeThumbnails(overlay);
+  }
+});
+
+function openFamilyTree(fishOrProfile) {
   const overlay = document.getElementById('family-tree-overlay');
   if (!overlay) return;
 
@@ -1106,15 +1170,20 @@ function openFamilyTree(fish) {
   content.innerHTML = '';
 
   const selfData = {
-    name: fish.name || 'Unnamed',
-    gender: fish.gender,
-    colorParts: fish.colorParts,
-    radius: fish.radius,
-    parentInfo: fish.parentInfo || null
+    name: fishOrProfile.name || 'Unnamed',
+    gender: fishOrProfile.gender,
+    colorParts: fishOrProfile.colorParts || fishOrProfile.color,
+    radius: fishOrProfile.radius || fishOrProfile.size,
+    parentInfo: fishOrProfile.parentInfo || null
   };
 
   content.appendChild(buildFamilyTreeNode(selfData, 0, null));
   overlay.classList.add('open');
+
+  // Enforce square shape on all thumbnail containers based on actual rendered heights
+  requestAnimationFrame(() => {
+    adjustTreeThumbnails(content);
+  });
 }
 
 function closeFamilyTree() {
@@ -1187,19 +1256,21 @@ function init() {
 
   const maxAttempts = 150;
 
-  // 1. Spawn named fishes (only active ones)
-  const activeNamedProfiles = settings.fishProfiles.filter(p => p.active !== false);
-  activeNamedProfiles.forEach((profile) => {
-    const { x, y, vx, vy } = getRandomSpawnPos(maxAttempts);
-    const spawnedFish = new Fish(x, y, vx, vy, profile.size || settings.fishSize, profile.color || settings.fishColor, profile.name, profile.visible !== false, profile.id, profile.gender, profile.breedingEnabled, profile.isBred, profile.isMature !== false, profile.birthTime, profile.targetRadius);
-    if (profile.parentInfo) spawnedFish.parentInfo = profile.parentInfo;
-    fishes.push(spawnedFish);
-  });
+  const activeProfiles = settings.fishProfiles.filter(p => p.active !== false);
 
-  // 2. Spawn visible unnamed fishes
-  for (let i = 0; i < settings.visibleUnnamedCount; i++) {
-    const { x, y, vx, vy } = getRandomSpawnPos(maxAttempts);
-    fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null));
+  if (activeProfiles.length > 0) {
+    activeProfiles.forEach((profile) => {
+      const { x, y, vx, vy } = getRandomSpawnPos(maxAttempts);
+      const spawnedFish = new Fish(x, y, vx, vy, profile.size || settings.fishSize, profile.color || settings.fishColor, profile.name, profile.visible !== false, profile.id, profile.gender, profile.breedingEnabled, profile.isBred, profile.isMature !== false, profile.birthTime, profile.targetRadius);
+      if (profile.parentInfo) spawnedFish.parentInfo = profile.parentInfo;
+      fishes.push(spawnedFish);
+    });
+  } else {
+    // Fallback if no active profiles saved yet
+    for (let i = 0; i < settings.fishCount; i++) {
+      const { x, y, vx, vy } = getRandomSpawnPos(maxAttempts);
+      fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null));
+    }
   }
 
   saveFishProfiles();
@@ -1281,7 +1352,7 @@ function animate() {
 
   // 4. Resolve physics & feeding
   const visibleFishes = fishes.filter(f => f.visible !== false);
-  resolveCollisions(visibleFishes, fishes.length < settings.fishCount);
+  resolveCollisions(visibleFishes, fishes.length < settings.maxCapacity);
   checkFeeding(visibleFishes, foods, ripples);
 
   // 4b. Update and draw heart particles
