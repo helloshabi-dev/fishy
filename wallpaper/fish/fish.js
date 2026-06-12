@@ -2,7 +2,7 @@
 import { randomRange, normalizeAngle } from "./utils.js";
 
 export class Fish {
-  constructor(x, y, vx, vy, radius, color = "#f0654e", name = "", visible = true, id = null) {
+  constructor(x, y, vx, vy, radius, color = "#f0654e", name = "", visible = true, id = null, gender = null, breedingEnabled = true, isBred = false, isMature = true, birthTime = null, targetRadius = null) {
     this.x = x;
     this.y = y;
     this.vx = vx;
@@ -10,9 +10,32 @@ export class Fish {
     this.ax = 0;
     this.ay = 0;
     this.radius = radius;
+    this.targetRadius = targetRadius || radius;
     this.name = name || "";
     this.visible = visible !== false;
     this.id = id || 'fish_' + Math.random().toString(36).substr(2, 9);
+
+    // Breeding state properties
+    this.gender = gender || (Math.random() < 0.5 ? 'male' : 'female');
+    this.breedingEnabled = breedingEnabled !== false;
+    this.isBred = !!isBred;
+    this.birthTime = birthTime || (this.isBred ? Date.now() : null);
+    this.isMature = isMature !== false;
+    
+    // Evaluate initial maturity from birth timestamp
+    if (this.isBred && !this.isMature && this.birthTime) {
+      const elapsedDays = (Date.now() - this.birthTime) / (1000 * 60 * 60 * 24);
+      this.radius = Math.min(this.targetRadius, 6 + elapsedDays * 1.0);
+      if (this.radius >= this.targetRadius) {
+        this.radius = this.targetRadius;
+        this.isMature = true;
+      }
+    }
+    
+    this.breedingCooldown = 0;
+    this.isBreeding = false;
+    this.breedingPartner = null;
+    this.breedingTimer = 0;
 
     this.baseMaxSpeed = randomRange(1.5, 2.2); // Calmer speeds suited for a desktop wallpaper
 
@@ -49,8 +72,8 @@ export class Fish {
     this.currentTarget = null;
     this.eatCooldown = 0;
     this.currentFlare = 0.18;
-    this.smoothAmpFactor = 0.04; // Smoothed amplitude — lerps toward computed target each frame to prevent abrupt wiggle snaps
-    this.kickAmp = 0; // Bilateral launch kick amplitude (decaying burst at start of movement)
+    this.smoothAmpFactor = 0.04; // Lerps toward computed target each frame
+    this.kickAmp = 0; // Bilateral launch kick amplitude
     this.kickPhase = 0; // Phase of the kick oscillation
     this.snatchTimer = 0; // Timer for snatching animation on eating food
 
@@ -58,12 +81,12 @@ export class Fish {
     this.angle1 = this.drawAngle;
     this.angle2 = this.drawAngle;
     this.angle2b = this.drawAngle;
-    this.angle3 = this.drawAngle + Math.PI; // Lobe joint 1 (pointing backward)
+    this.angle3 = this.drawAngle + Math.PI; // Lobe joint 1
     this.angle4 = this.drawAngle + Math.PI; // Lobe joint 2
     this.angle5 = this.drawAngle + Math.PI; // Lobe joint 3
     this.angle6 = this.drawAngle + Math.PI; // Lobe joint 4 (tip)
-    this.smoothTailDev = 0; // kept for backward compat, unused
-    this.tailWorldAngle = this.drawAngle + Math.PI; // World-space geometric angle of the tail tip (including wiggle)
+    this.smoothTailDev = 0;
+    this.tailWorldAngle = this.drawAngle + Math.PI;
 
     this.collisionCircles = {
       mouth: { x: this.x, y: this.y, r: this.radius * 0.3 },
@@ -74,25 +97,47 @@ export class Fish {
       s3: { x: this.x, y: this.y, r: this.radius * 0.30 }
     };
 
-    // Bioluminescent marine color theme - Now solid Coral Koi (matching the uploaded image)
-    this.color1 = color;
-    this.color2 = color;
-    this.tailColor = color;
-    this.finColor = color;
+    // Initialize custom color parts
+    this.updateColor(color);
   }
 
   updateColor(color) {
-    this.color1 = color;
-    this.color2 = color;
-    this.tailColor = color;
-    this.finColor = color;
+    if (typeof color === 'object' && color !== null) {
+      this.colorParts = {
+        head: color.head || '#f0654e',
+        body: color.body || '#f0654e',
+        s1: color.s1 || '#f0654e',
+        s2: color.s2 || '#f0654e',
+        leftFin: color.leftFin || '#f0654e',
+        rightFin: color.rightFin || '#f0654e',
+        tailLeft: Array.isArray(color.tailLeft) ? [...color.tailLeft] : Array(5).fill(color.tailLeft || color.tail || '#f0654e'),
+        tailCenter: Array.isArray(color.tailCenter) ? [...color.tailCenter] : Array(5).fill(color.tailCenter || color.tail || '#f0654e'),
+        tailRight: Array.isArray(color.tailRight) ? [...color.tailRight] : Array(5).fill(color.tailRight || color.tail || '#f0654e')
+      };
+    } else {
+      this.colorParts = {
+        head: color,
+        body: color,
+        s1: color,
+        s2: color,
+        leftFin: color,
+        rightFin: color,
+        tailLeft: Array(5).fill(color),
+        tailCenter: Array(5).fill(color),
+        tailRight: Array(5).fill(color)
+      };
+    }
+    this.color1 = this.colorParts.body;
+    this.color2 = this.colorParts.body;
+    this.tailColor = this.colorParts.tailCenter[0];
+    this.finColor = this.colorParts.leftFin;
   }
 
   // ============================================================
   // DRAW — top-down view with spine wiggles and dynamic fins
   // ============================================================
 
-  draw(ctx) {
+  draw(ctx, isSettingsOpen = false) {
     ctx.save();
     ctx.translate(this.x, this.y);
 
@@ -247,6 +292,88 @@ export class Fish {
     };
 
     ctx.restore();
+
+    if (isSettingsOpen) {
+      this._drawSettingsBadge(ctx);
+    }
+  }
+
+  _drawSettingsBadge(ctx) {
+    ctx.save();
+    
+    // Center it above the fish
+    const yOffset = -this.radius - 18;
+    ctx.translate(this.x, this.y + yOffset);
+    
+    // Choose gender symbol and color
+    const genderSymbol = this.gender === 'male' ? '♂' : '♀';
+    const genderColor = this.gender === 'male' ? '#60a5fa' : '#f472b6';
+    
+    // Breeding indicator
+    const breedingSymbol = this.breedingEnabled ? '💖' : '🖤';
+    
+    // Text contents
+    const nameStr = this.name ? this.name : 'Unnamed';
+    const text = `${nameStr} (${genderSymbol}) ${breedingSymbol}`;
+    
+    // Measure text
+    ctx.font = '500 11px "Outfit", sans-serif';
+    const textWidth = ctx.measureText(text).width;
+    
+    // Capsule dimensions
+    const padX = 8;
+    const padY = 4;
+    const rectW = textWidth + padX * 2;
+    const rectH = 18;
+    const rectX = -rectW / 2;
+    const rectY = -rectH / 2;
+    
+    // Draw capsule background (glassmorphic dark theme)
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.lineWidth = 1;
+    
+    // Rounded rectangle path
+    const r = 9; // fully rounded corners
+    ctx.beginPath();
+    ctx.moveTo(rectX + r, rectY);
+    ctx.lineTo(rectX + rectW - r, rectY);
+    ctx.arcTo(rectX + rectW, rectY, rectX + rectW, rectY + rectH, r);
+    ctx.lineTo(rectX + rectW, rectY + rectH - r);
+    ctx.arcTo(rectX + rectW, rectY + rectH, rectX, rectY + rectH, r);
+    ctx.lineTo(rectX + r, rectY + rectH);
+    ctx.arcTo(rectX, rectY + rectH, rectX, rectY, r);
+    ctx.lineTo(rectX, rectY + r);
+    ctx.arcTo(rectX, rectY, rectX + rectW, rectY, r);
+    ctx.closePath();
+    
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw Text
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    
+    const nameWidth = ctx.measureText(nameStr + ' ').width;
+    const genderWidth = ctx.measureText(' (' + genderSymbol + ')').width;
+    const startX = -textWidth / 2;
+    
+    ctx.fillStyle = '#f1f5f9'; // main text color
+    ctx.fillText(nameStr, startX, 0);
+    
+    ctx.fillStyle = '#cbd5e1'; // muted text for bracket
+    ctx.fillText(' (', startX + nameWidth, 0);
+    
+    ctx.fillStyle = genderColor; // gender symbol color
+    ctx.fillText(genderSymbol, startX + nameWidth + ctx.measureText(' (').width, 0);
+    
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(') ', startX + nameWidth + ctx.measureText(' (').width + ctx.measureText(genderSymbol).width, 0);
+    
+    // Draw heart
+    ctx.fillText(breedingSymbol, startX + nameWidth + genderWidth, 0);
+    
+    ctx.restore();
   }
 
   // Draws the two pectoral fins underneath the body
@@ -270,7 +397,7 @@ export class Fish {
       0,
     );
     ctx.closePath();
-    ctx.fillStyle = this.finColor;
+    ctx.fillStyle = this.colorParts.rightFin;
     ctx.fill();
     ctx.restore();
 
@@ -288,12 +415,12 @@ export class Fish {
     );
     ctx.quadraticCurveTo(
       -this.radius * 0.4,
-      this.radius * 0.2,
+      -this.radius * 0.2,
       -this.radius * 0.2,
       0,
     );
     ctx.closePath();
-    ctx.fillStyle = this.finColor;
+    ctx.fillStyle = this.colorParts.leftFin;
     ctx.fill();
     ctx.restore();
   }
@@ -308,13 +435,13 @@ export class Fish {
     ctx.lineTo(x1, y1 + r1);
     ctx.quadraticCurveTo(controlX, headY + headR * 1.12, headX, headY + headR);
     ctx.closePath();
-    ctx.fillStyle = this.color1;
+    ctx.fillStyle = this.colorParts.body;
     ctx.fill();
 
     // 4. Circle Head — swayed head center overlapping the body perfectly
     ctx.beginPath();
     ctx.arc(headX, headY, headR, 0, Math.PI * 2);
-    ctx.fillStyle = this.color1;
+    ctx.fillStyle = this.colorParts.head;
     ctx.fill();
 
     // 5. Tapered tail connector between segment 1 and segment 2
@@ -336,13 +463,13 @@ export class Fish {
     ctx.lineTo(x2_bot, y2_bot);
     ctx.lineTo(x1_bot, y1_bot);
     ctx.closePath();
-    ctx.fillStyle = this.color1;
+    ctx.fillStyle = this.colorParts.s1;
     ctx.fill();
 
     // Joint overlap circle for Segment 1
     ctx.beginPath();
     ctx.arc(x1, y1, r1, 0, Math.PI * 2);
-    ctx.fillStyle = this.color1;
+    ctx.fillStyle = this.colorParts.s1;
     ctx.fill();
 
     // 6. Tapered tail connector between segment 2 and segment 3
@@ -364,13 +491,13 @@ export class Fish {
     ctx.lineTo(x3_bot, y3_bot);
     ctx.lineTo(x2_bot_c2, y2_bot_c2);
     ctx.closePath();
-    ctx.fillStyle = this.color1;
+    ctx.fillStyle = this.colorParts.s2;
     ctx.fill();
 
     // Joint overlap circle for Segment 2
     ctx.beginPath();
     ctx.arc(x2, y2, r2, 0, Math.PI * 2);
-    ctx.fillStyle = this.color1;
+    ctx.fillStyle = this.colorParts.s2;
     ctx.fill();
 
     // Segment 3 circle is omitted to let the tail fan's starting cap render directly on top
@@ -397,24 +524,24 @@ export class Fish {
     const subW5 = fanW * 1.45; // Wide flaring tip
 
     // Helper: tapered connector polygon + rounded cap at the end
-    const drawTaperedSegment = (L, wStart, wEnd) => {
+    const drawTaperedSegment = (L, wStart, wEnd, color) => {
       ctx.beginPath();
       ctx.moveTo(0, -wStart / 2);
       ctx.lineTo(L, -wEnd / 2);
       ctx.lineTo(L, wEnd / 2);
       ctx.lineTo(0, wStart / 2);
       ctx.closePath();
-      ctx.fillStyle = this.tailColor;
+      ctx.fillStyle = color;
       ctx.fill();
 
       ctx.beginPath();
       ctx.arc(L, 0, wEnd / 2, 0, Math.PI * 2);
-      ctx.fillStyle = this.tailColor;
+      ctx.fillStyle = color;
       ctx.fill();
     };
 
     // Helper: terminal segment with a squarer flat trailing edge and slightly rounded corners
-    const drawSquareEndSegment = (L, wStart, wEnd) => {
+    const drawSquareEndSegment = (L, wStart, wEnd, color) => {
       const cornerR = wEnd * 0.18; // 18% corner rounding (beautifully soft, squarer blade corners!)
       ctx.beginPath();
       ctx.moveTo(0, -wStart / 2);
@@ -424,13 +551,13 @@ export class Fish {
       ctx.quadraticCurveTo(L, wEnd / 2, L - cornerR, wEnd / 2);
       ctx.lineTo(0, wStart / 2);
       ctx.closePath();
-      ctx.fillStyle = this.tailColor;
+      ctx.fillStyle = color;
       ctx.fill();
     };
 
     // Helper: draws a single 5-segment lobe. Each joint bends by the angular lag
     // between consecutive chain angles — pure follow-through kinematics.
-    const drawLobe = (baseAngle) => {
+    const drawLobe = (baseAngle, lobeColors) => {
       ctx.save();
       ctx.translate(x3, y3);
       ctx.rotate(baseAngle);
@@ -439,8 +566,7 @@ export class Fish {
       const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
       const half = Math.PI / 2;
 
-      // Local angle differences: how much each chain link lags behind the previous.
-      // j1 is wrapped to [-π, π] before amplification to prevent 2π jump glitches.
+      // Local angle differences
       let _j1 = this.angle3 - this.tailWorldAngle;
       _j1 = normalizeAngle(_j1);
       const j1 = clamp(_j1 * 2.0, -half, half);
@@ -451,34 +577,34 @@ export class Fish {
       // Starting cap
       ctx.beginPath();
       ctx.arc(0, 0, w0 / 2, 0, Math.PI * 2);
-      ctx.fillStyle = this.tailColor;
+      ctx.fillStyle = lobeColors[0];
       ctx.fill();
 
-      drawTaperedSegment(subL1, w0, subW1);
+      drawTaperedSegment(subL1, w0, subW1, lobeColors[0]);
       ctx.translate(subL1 * 0.85, 0);
       ctx.rotate(j1);
 
-      drawTaperedSegment(subL2, subW1, subW2);
+      drawTaperedSegment(subL2, subW1, subW2, lobeColors[1]);
       ctx.translate(subL2 * 0.85, 0);
       ctx.rotate(j2);
 
-      drawTaperedSegment(subL3, subW2, subW3);
+      drawTaperedSegment(subL3, subW2, subW3, lobeColors[2]);
       ctx.translate(subL3 * 0.85, 0);
       ctx.rotate(j3);
 
-      drawTaperedSegment(subL4, subW3, subW4);
+      drawTaperedSegment(subL4, subW3, subW4, lobeColors[3]);
       ctx.translate(subL4 * 0.85, 0);
       ctx.rotate(j4);
 
-      drawSquareEndSegment(subL5, subW4, subW5);
+      drawSquareEndSegment(subL5, subW4, subW5, lobeColors[4]);
 
       ctx.restore();
     };
 
     // Fan lobes follow the tail geometry — no independent sine drive
-    drawLobe(tailAngle - flare);
-    drawLobe(tailAngle);
-    drawLobe(tailAngle + flare);
+    drawLobe(tailAngle - flare, this.colorParts.tailLeft);
+    drawLobe(tailAngle, this.colorParts.tailCenter);
+    drawLobe(tailAngle + flare, this.colorParts.tailRight);
   }
 
   triggerSnatch() {
@@ -497,9 +623,65 @@ export class Fish {
   // UPDATE — called every frame; drives the full fish simulation
   // ============================================================
 
+  _updateBreedingDance() {
+    if (!this.breedingPartner) {
+      this.isBreeding = false;
+      return;
+    }
+    
+    const midX = (this.x + this.breedingPartner.x) * 0.5;
+    const midY = (this.y + this.breedingPartner.y) * 0.5;
+    
+    // Calculate current angle relative to midpoint
+    let angle = Math.atan2(this.y - midY, this.x - midX);
+    
+    // Increment angle to rotate around the center
+    angle += 0.04;
+    
+    // Target position on the circle
+    const dist = Math.max(20, this.radius * 1.5);
+    const tx = midX + Math.cos(angle) * dist;
+    const ty = midY + Math.sin(angle) * dist;
+    
+    // Move towards target position smoothly
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    this.vx += (dx * 0.1 - this.vx) * 0.1;
+    this.vy += (dy * 0.1 - this.vy) * 0.1;
+    this.currentSpeed = Math.hypot(this.vx, this.vy);
+    
+    // Set drawAngle tangent to the circle
+    const tangentAngle = angle + Math.PI / 2;
+    this.drawAngle += normalizeAngle(tangentAngle - this.drawAngle) * 0.1;
+    
+    // Tick down timer
+    this.breedingTimer--;
+  }
+
   update(canvas, foods, mouse, mouseIdleFrames) {
     if (this.eatCooldown > 0) this.eatCooldown--;
     if (this.snatchTimer > 0) this.snatchTimer--;
+    if (this.breedingCooldown > 0) this.breedingCooldown--;
+
+    if (!this.isMature) {
+      if (this.isBred && this.birthTime) {
+        const elapsedDays = (Date.now() - this.birthTime) / (1000 * 60 * 60 * 24);
+        this.radius = Math.min(this.targetRadius, 6 + elapsedDays * 1.0);
+      } else {
+        this.radius += 0.02;
+      }
+      if (this.radius >= this.targetRadius) {
+        this.radius = this.targetRadius;
+        this.isMature = true;
+      }
+    }
+
+    if (this.isBreeding) {
+      this._updateBreedingDance();
+      this._moveAndPhysics(canvas);
+      this._updateJointsAndFins(0);
+      return;
+    }
 
     // ① State machine — handles transitions between idle/prepping/swimming/lunge
     this._tickStateMachine();

@@ -298,7 +298,7 @@
       .fish-item-row {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 5px;
         width: 100%;
       }
       .fish-color-swatch {
@@ -328,6 +328,7 @@
         font-size: 0.82rem;
         padding: 4px 8px;
         flex: 1;
+        min-width: 0;
         outline: none;
         transition: border-color 0.2s, background-color 0.2s;
         user-select: text;
@@ -345,11 +346,15 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 4px;
+        padding: 2px;
         border-radius: 6px;
         transition: all 0.2s;
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
+      }
+      .fish-action-btn svg, .fish-delete-btn svg {
+        width: 14px;
+        height: 14px;
       }
       .fish-action-btn:hover {
         color: var(--text-main);
@@ -366,11 +371,11 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 4px;
+        padding: 2px;
         border-radius: 6px;
         transition: all 0.2s;
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
       }
       .fish-delete-btn:hover {
         color: rgb(239, 68, 68);
@@ -445,6 +450,268 @@
         color: #fecaca;
       }
 
+      /* ============================================================
+         FAMILY TREE OVERLAY
+         ============================================================ */
+      .ft-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(7, 17, 30, 0.72);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .ft-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .ft-modal {
+        position: relative;
+        width: min(560px, 94vw);
+        max-height: 88vh;
+        overflow-y: auto;
+        background: rgba(15, 23, 42, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        border-radius: 22px;
+        padding: 24px 24px 20px;
+        box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
+        transform: translateY(12px) scale(0.97);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .ft-overlay.open .ft-modal {
+        transform: translateY(0) scale(1);
+      }
+      .ft-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.09);
+      }
+      .ft-modal-title {
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ft-close-btn {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #94a3b8;
+        font-size: 1rem;
+        transition: all 0.2s;
+        flex-shrink: 0;
+      }
+      .ft-close-btn:hover {
+        background: rgba(239, 68, 68, 0.18);
+        border-color: rgba(239, 68, 68, 0.35);
+        color: #fecaca;
+      }
+
+      /* ---- Recursive tree structure ---- */
+      .ft-tree-content {
+        /* scroll handled by .ft-modal */
+      }
+
+      /* Root item (child fish) — no indentation */
+      .ft-tree-root {
+        margin-bottom: 0;
+      }
+
+      /* Children branch container */
+      .ft-tree-children {
+        margin-left: 9px;
+        padding-left: 16px;
+        border-left: 1px dashed rgba(255,255,255,0.14);
+        margin-top: 4px;
+      }
+
+      /* Each tree item (ancestor node) */
+      .ft-tree-item {
+        position: relative;
+        margin-top: 8px;
+      }
+
+      /* Horizontal connector from the vertical rail to each card */
+      .ft-tree-children > .ft-tree-item::before {
+        content: '';
+        position: absolute;
+        left: -16px;
+        top: 13px;
+        width: 12px;
+        height: 1px;
+        background: rgba(255,255,255,0.14);
+      }
+
+      /* Cards — flex-row: thumbnail left, content right */
+      .ft-tree-card {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 9px 11px 9px 9px;
+        transition: border-color 0.2s;
+        display: flex;
+        flex-direction: row;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .ft-tree-card:hover {
+        border-color: rgba(255,255,255,0.15);
+      }
+      /* Child (self) card — highlighted */
+      .ft-tree-card--root {
+        border-color: rgba(240, 101, 78, 0.4);
+        background: rgba(240, 101, 78, 0.07);
+        box-shadow: 0 0 18px rgba(240, 101, 78, 0.12);
+        padding: 11px 13px 11px 10px;
+      }
+      /* Parent card */
+      .ft-tree-card--parent {
+        background: rgba(255,255,255,0.05);
+      }
+      /* Grandparent+ card — subtler */
+      .ft-tree-card--ancestor {
+        background: rgba(255,255,255,0.025);
+        border-color: rgba(255,255,255,0.05);
+      }
+
+      /* LEFT: fish preview thumbnail */
+      .ft-fish-preview {
+        width: 88px;
+        height: 52px;
+        object-fit: contain;
+        border-radius: 8px;
+        background: rgba(7, 17, 30, 0.55);
+        display: block;
+        flex-shrink: 0;
+        border: 1px solid rgba(255,255,255,0.06);
+        align-self: center;
+      }
+      .ft-tree-card--parent .ft-fish-preview {
+        width: 74px;
+        height: 44px;
+      }
+      .ft-tree-card--ancestor .ft-fish-preview {
+        width: 60px;
+        height: 36px;
+      }
+
+      /* RIGHT: content body */
+      .ft-tree-card-body {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-self: center;
+      }
+
+      /* Card header row */
+      .ft-tree-card-header {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .ft-body-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.18);
+        flex-shrink: 0;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      }
+      .ft-tree-name {
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+      }
+      .ft-tree-role {
+        font-size: 0.62rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #64748b;
+        flex-shrink: 0;
+      }
+
+      /* Compact color dot-row (parents + all ancestors) */
+      .ft-compact-colors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+      }
+
+      /* Full color grid (child only) */
+      .ft-color-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 3px 5px;
+      }
+      .ft-color-cell {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .ft-color-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+        border: 1px solid rgba(255,255,255,0.12);
+      }
+      .ft-color-label {
+        font-size: 0.58rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Collapse toggle button */
+      .ft-tree-toggle {
+        background: rgba(255,255,255,0.07);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 4px;
+        color: #94a3b8;
+        font-size: 0.65rem;
+        cursor: pointer;
+        padding: 1px 5px 2px;
+        transition: all 0.15s;
+        flex-shrink: 0;
+        margin-left: 2px;
+        line-height: 1.2;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .ft-tree-toggle:hover {
+        background: rgba(255,255,255,0.14);
+        border-color: rgba(255,255,255,0.25);
+        color: #f1f5f9;
+      }
+
     </style>
   </head>
   <body>
@@ -490,18 +757,14 @@
             <span>Fish Color</span>
           </div>
           <div class="color-presets" id="fish-color-presets">
-            <!-- Coral Orange (Default) -->
+            <!-- Orange (Default) -->
             <div class="color-preset active" data-color="#f0654e" style="background-color: #f0654e;"></div>
-            <!-- Gold/Yellow -->
-            <div class="color-preset" data-color="#ffb347" style="background-color: #ffb347;"></div>
-            <!-- Electric Blue -->
-            <div class="color-preset" data-color="#3b82f6" style="background-color: #3b82f6;"></div>
-            <!-- Lime Green -->
-            <div class="color-preset" data-color="#10b981" style="background-color: #10b981;"></div>
-            <!-- Pure White -->
-            <div class="color-preset" data-color="#f8fafc" style="background-color: #f8fafc; border: 1px solid rgba(255,255,255,0.2);"></div>
-            <!-- Pink Pearl -->
-            <div class="color-preset" data-color="#ec4899" style="background-color: #ec4899;"></div>
+            <!-- Black -->
+            <div class="color-preset" data-color="#111111" style="background-color: #111111;"></div>
+            <!-- White -->
+            <div class="color-preset" data-color="#ffffff" style="background-color: #ffffff; border: 1px solid rgba(255,255,255,0.2);"></div>
+            <!-- Dark Red -->
+            <div class="color-preset" data-color="#8b0000" style="background-color: #8b0000;"></div>
           </div>
           <!-- Custom Color Picker -->
           <div class="custom-color-wrapper">
@@ -599,6 +862,18 @@
         <div>• <strong>Cmd+Alt+S</strong> (Mac) / <strong>Ctrl+Alt+S</strong> (Win) — Toggle Settings Panel</div>
         <div>• <strong>Feeding Mode</strong> — Intercepts desktop clicks to feed fish anywhere, even with settings closed.</div>
         <div>• <strong>Click (settings open / feeding mode on)</strong> — Feed the fish</div>
+      </div>
+    </div>
+
+    <!-- Family Tree Overlay -->
+    <div class="ft-overlay" id="family-tree-overlay" aria-modal="true" role="dialog" aria-label="Family Tree">
+      <div class="ft-modal">
+        <div class="ft-modal-header">
+          <div class="ft-modal-title">🌳 Family Tree</div>
+          <button class="ft-close-btn" id="ft-close-btn" title="Close" onclick="(function(){ const o=document.getElementById('family-tree-overlay'); if(o) o.classList.remove('open'); })()">✕</button>
+        </div>
+        <!-- Dynamically populated by buildFamilyTreeNode() in main.js -->
+        <div id="ft-tree-content" class="ft-tree-content"></div>
       </div>
     </div>
 

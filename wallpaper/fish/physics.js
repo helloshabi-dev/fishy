@@ -4,11 +4,15 @@ import { Ripple } from './ripple.js';
 
 // Resolves fish-to-fish collisions: faster fish (the pusher) pushes the slower/stationary fish
 // and slides smoothly around it rather than bouncing backward elastically.
-export function resolveCollisions(fishes) {
+export function resolveCollisions(fishes, allowBreeding = true) {
   for (let i = 0; i < fishes.length; i++) {
     for (let j = i + 1; j < fishes.length; j++) {
       const f1 = fishes[i];
       const f2 = fishes[j];
+
+      if (f1.isBreeding || f2.isBreeding) {
+        continue;
+      }
 
       const dx = f2.x - f1.x;
       const dy = f2.y - f1.y;
@@ -16,6 +20,32 @@ export function resolveCollisions(fishes) {
       const minDist = f1.radius + f2.radius;
 
       if (distSq < minDist * minDist) {
+        // Check for breeding
+        const isOppositeGender = (f1.gender === 'male' && f2.gender === 'female') || (f1.gender === 'female' && f2.gender === 'male');
+        if (allowBreeding &&
+            isOppositeGender &&
+            f1.breedingEnabled &&
+            f2.breedingEnabled &&
+            f1.breedingCooldown <= 0 &&
+            f2.breedingCooldown <= 0 &&
+            f1.isMature &&
+            f2.isMature) {
+          
+          f1.isBreeding = true;
+          f2.isBreeding = true;
+          f1.breedingPartner = f2;
+          f2.breedingPartner = f1;
+          f1.breedingTimer = 120; // 2 seconds (120 frames at 60fps)
+          f2.breedingTimer = 120;
+          f1.vx = 0;
+          f1.vy = 0;
+          f2.vx = 0;
+          f2.vy = 0;
+          f1.currentSpeed = 0;
+          f2.currentSpeed = 0;
+          continue;
+        }
+
         let dist = Math.sqrt(distSq);
         if (dist === 0 || isNaN(dist)) {
           dist = 0.1; // Prevent division by zero

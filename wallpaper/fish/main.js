@@ -80,32 +80,46 @@ function getRandomSpawnPos(maxAttempts = 150) {
 }
 
 function saveFishProfiles() {
-  const activeNamedFishes = fishes.filter(fish => fish.name && fish.name.trim() !== '');
+  const activeNamedOrBredFishes = fishes.filter(fish => (fish.name && fish.name.trim() !== '') || fish.isBred);
 
-  const activeProfiles = activeNamedFishes.map(fish => ({
+  const activeProfiles = activeNamedOrBredFishes.map(fish => ({
     id: fish.id,
-    name: fish.name.trim(),
-    color: fish.color1,
+    name: (fish.name || '').trim(),
+    color: fish.colorParts || fish.color1,
     size: fish.radius,
     visible: fish.visible !== false,
-    active: true
+    active: true,
+    gender: fish.gender,
+    breedingEnabled: fish.breedingEnabled,
+    isBred: fish.isBred,
+    isMature: fish.isMature,
+    birthTime: fish.birthTime,
+    targetRadius: fish.targetRadius,
+    parentInfo: fish.parentInfo || null
   }));
 
   // Merge active profiles with existing settings.fishProfiles to keep inactive profiles intact
   let mergedProfiles = settings.fishProfiles.map(p => {
     const activeFish = fishes.find(f => f.id === p.id);
     if (activeFish) {
-      if (activeFish.name && activeFish.name.trim() !== '') {
+      if ((activeFish.name && activeFish.name.trim() !== '') || activeFish.isBred) {
         return {
           id: activeFish.id,
-          name: activeFish.name.trim(),
-          color: activeFish.color1,
+          name: (activeFish.name || '').trim(),
+          color: activeFish.colorParts || activeFish.color1,
           size: activeFish.radius,
           visible: activeFish.visible !== false,
-          active: true
+          active: true,
+          gender: activeFish.gender,
+          breedingEnabled: activeFish.breedingEnabled,
+          isBred: activeFish.isBred,
+          isMature: activeFish.isMature,
+          birthTime: activeFish.birthTime,
+          targetRadius: activeFish.targetRadius,
+          parentInfo: activeFish.parentInfo || null
         };
       } else {
-        // Name cleared, discard profile
+        // Name cleared and not bred, discard profile
         return null;
       }
     }
@@ -122,8 +136,8 @@ function saveFishProfiles() {
     }
   });
 
-  // Filter out any invalid profiles without names
-  mergedProfiles = mergedProfiles.filter(p => p.name && p.name.trim() !== '');
+  // Filter out any invalid profiles (must have name or be bred)
+  mergedProfiles = mergedProfiles.filter(p => (p.name && p.name.trim() !== '') || p.isBred);
 
   settings.fishProfiles = mergedProfiles;
   localStorage.setItem('fishy_fishProfiles', JSON.stringify(mergedProfiles));
@@ -132,17 +146,19 @@ function saveFishProfiles() {
   settings.visibleUnnamedCount = visibleUnnamedCount;
   localStorage.setItem('fishy_visibleUnnamedCount', visibleUnnamedCount);
 
-  settings.fishCount = fishes.length;
-  localStorage.setItem('fishy_fishCount', settings.fishCount);
+  if (fishes.length > settings.fishCount) {
+    settings.fishCount = fishes.length;
+    localStorage.setItem('fishy_fishCount', settings.fishCount);
 
-  // Sync count UI
-  const countSlider = document.getElementById("fish-count-slider");
-  const countVal = document.getElementById("fish-count-value");
-  if (countSlider) {
-    countSlider.value = settings.fishCount;
-  }
-  if (countVal) {
-    countVal.textContent = settings.fishCount;
+    // Sync count UI
+    const countSlider = document.getElementById("fish-count-slider");
+    const countVal = document.getElementById("fish-count-value");
+    if (countSlider) {
+      countSlider.value = settings.fishCount;
+    }
+    if (countVal) {
+      countVal.textContent = settings.fishCount;
+    }
   }
 }
 
@@ -156,20 +172,20 @@ function renderFishList() {
     const item = document.createElement('div');
     item.className = 'fish-list-item';
 
-    // Row 1: Swatch, Name Input, Show/Hide Button, Delete Button
+    // Row 1: Swatch, Name Input, Gender Toggle, Breeding Toggle, Show/Hide Button, Delete Button
     const row1 = document.createElement('div');
     row1.className = 'fish-item-row';
 
     // Color Swatch
     const swatch = document.createElement('div');
     swatch.className = 'fish-color-swatch';
-    swatch.style.backgroundColor = fish.color1;
+    swatch.style.backgroundColor = fish.colorParts ? fish.colorParts.body : fish.color1;
     swatch.title = 'Click to change color';
 
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.className = 'fish-color-input-hidden';
-    colorInput.value = fish.color1;
+    colorInput.value = fish.colorParts ? fish.colorParts.body : fish.color1;
 
     swatch.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -194,6 +210,53 @@ function renderFishList() {
     nameInput.addEventListener('input', (e) => {
       fish.name = e.target.value;
       saveFishProfiles();
+    });
+
+    // Gender Toggle Button
+    const genderBtn = document.createElement('button');
+    genderBtn.type = 'button';
+    genderBtn.className = 'fish-action-btn';
+    genderBtn.style.fontSize = '0.9rem';
+    genderBtn.style.fontWeight = 'bold';
+    genderBtn.style.display = 'flex';
+    genderBtn.style.alignItems = 'center';
+    genderBtn.style.justifyContent = 'center';
+    if (fish.gender === 'male') {
+      genderBtn.innerHTML = '♂';
+      genderBtn.style.color = '#60a5fa';
+      genderBtn.title = 'Gender: Male (Click to toggle)';
+    } else {
+      genderBtn.innerHTML = '♀';
+      genderBtn.style.color = '#f472b6';
+      genderBtn.title = 'Gender: Female (Click to toggle)';
+    }
+    genderBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fish.gender = fish.gender === 'male' ? 'female' : 'male';
+      saveFishProfiles();
+      renderFishList();
+    });
+
+    // Breeding Toggle Button
+    const breedingBtn = document.createElement('button');
+    breedingBtn.type = 'button';
+    breedingBtn.className = 'fish-action-btn';
+    breedingBtn.style.fontSize = '0.9rem';
+    breedingBtn.style.display = 'flex';
+    breedingBtn.style.alignItems = 'center';
+    breedingBtn.style.justifyContent = 'center';
+    if (fish.breedingEnabled) {
+      breedingBtn.innerHTML = '💖';
+      breedingBtn.title = 'Breeding: Enabled (Click to toggle)';
+    } else {
+      breedingBtn.innerHTML = '🖤';
+      breedingBtn.title = 'Breeding: Disabled (Click to toggle)';
+    }
+    breedingBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fish.breedingEnabled = !fish.breedingEnabled;
+      saveFishProfiles();
+      renderFishList();
     });
 
     // Show/Hide Toggle Button
@@ -247,9 +310,29 @@ function renderFishList() {
       renderFishList();
     });
 
+    // Family Tree Button — only shown for bred fish
+    if (fish.isBred && fish.parentInfo) {
+      const treeBtn = document.createElement('button');
+      treeBtn.type = 'button';
+      treeBtn.className = 'fish-action-btn';
+      treeBtn.style.fontSize = '0.88rem';
+      treeBtn.style.display = 'flex';
+      treeBtn.style.alignItems = 'center';
+      treeBtn.style.justifyContent = 'center';
+      treeBtn.innerHTML = '🌳';
+      treeBtn.title = 'View Family Tree';
+      treeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFamilyTree(fish);
+      });
+      row1.appendChild(treeBtn);
+    }
+
     row1.appendChild(swatch);
     row1.appendChild(colorInput);
     row1.appendChild(nameInput);
+    row1.appendChild(genderBtn);
+    row1.appendChild(breedingBtn);
     row1.appendChild(showHideBtn);
     row1.appendChild(deleteBtn);
 
@@ -281,6 +364,10 @@ function renderFishList() {
       e.stopPropagation();
       const newSize = parseInt(e.target.value);
       fish.radius = newSize;
+      fish.targetRadius = newSize;
+      if (!fish.isMature) {
+        fish.isMature = true;
+      }
       sizeValEl.textContent = newSize + 'px';
       saveFishProfiles();
     });
@@ -312,7 +399,7 @@ function renderFishList() {
         // Static color swatch
         const swatch = document.createElement('div');
         swatch.className = 'fish-color-swatch';
-        swatch.style.backgroundColor = p.color;
+        swatch.style.backgroundColor = p.color && typeof p.color === 'object' ? p.color.body : p.color;
         swatch.style.cursor = 'default';
 
         // Static name label
@@ -337,7 +424,9 @@ function renderFishList() {
         addBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           const { x, y, vx, vy } = getRandomSpawnPos(150);
-          fishes.push(new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id));
+          const restoredFish = new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id, p.gender, p.breedingEnabled, p.isBred, p.isMature !== false, p.birthTime, p.targetRadius);
+          if (p.parentInfo) restoredFish.parentInfo = p.parentInfo;
+          fishes.push(restoredFish);
           saveFishProfiles();
           renderFishList();
         });
@@ -452,7 +541,9 @@ function adjustFishCount(targetCount) {
       const { x, y, vx, vy } = getRandomSpawnPos(150);
       if (inactiveProfiles.length > 0) {
         const p = inactiveProfiles[0];
-        fishes.push(new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id));
+        const restoredFish = new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id, p.gender, p.breedingEnabled, p.isBred, p.isMature !== false, p.birthTime, p.targetRadius);
+        if (p.parentInfo) restoredFish.parentInfo = p.parentInfo;
+        fishes.push(restoredFish);
       } else {
         fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null));
       }
@@ -516,7 +607,11 @@ function initSettingsUI() {
     sizeVal.textContent = size + "px";
     localStorage.setItem("fishy_fishSize", size);
     fishes.forEach((fish) => {
-      fish.radius = size;
+      const isNamed = fish.name && fish.name.trim() !== '';
+      if (!isNamed && !fish.isBred) {
+        fish.radius = size;
+        fish.targetRadius = size;
+      }
     });
     saveFishProfiles();
     renderFishList();
@@ -559,9 +654,12 @@ function initSettingsUI() {
       }
     });
 
-    // Update all fish
+    // Update all fish EXCEPT named or bred ones
     fishes.forEach((fish) => {
-      fish.updateColor(color);
+      const isNamed = fish.name && fish.name.trim() !== '';
+      if (!isNamed && !fish.isBred) {
+        fish.updateColor(color);
+      }
     });
     saveFishProfiles();
     renderFishList();
@@ -759,6 +857,271 @@ window.addEventListener("resize", function () {
   init();
 });
 
+class HeartParticle {
+  constructor(x, y) {
+    this.x = x + randomRange(-12, 12);
+    this.y = y + randomRange(-12, 12);
+    this.vx = randomRange(-0.6, 0.6);
+    this.vy = randomRange(-1.6, -0.6); // float upwards
+    this.size = randomRange(5, 10);
+    this.alpha = 1.0;
+    this.decay = randomRange(0.007, 0.013); // slow fade
+    this.wiggle = randomRange(0, 100);
+  }
+  
+  update() {
+    this.x += this.vx + Math.sin(this.wiggle) * 0.25;
+    this.y += this.vy;
+    this.wiggle += 0.05;
+    this.alpha -= this.decay;
+  }
+  
+  draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = '#f43f5e'; // premium rose red
+    ctx.translate(this.x, this.y);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    const s = this.size;
+    ctx.bezierCurveTo(-s / 2, -s / 2, -s, -s / 4, -s, s / 4);
+    ctx.bezierCurveTo(-s, s * 0.7, -s * 0.2, s * 0.9, 0, s * 1.2);
+    ctx.bezierCurveTo(s * 0.2, s * 0.9, s, s * 0.7, s, s * 0.4);
+    ctx.bezierCurveTo(s, -s / 4, s / 2, -s / 2, 0, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// FAMILY TREE OVERLAY
+// ============================================================
+
+function makeFishColorGrid(colorParts) {
+  const parts = [
+    { label: 'Head',       color: colorParts.head },
+    { label: 'Body',       color: colorParts.body },
+    { label: 'Seg 1',      color: colorParts.s1 },
+    { label: 'Seg 2',      color: colorParts.s2 },
+    { label: 'Left Fin',   color: colorParts.leftFin },
+    { label: 'Right Fin',  color: colorParts.rightFin },
+  ];
+  ['tailLeft', 'tailCenter', 'tailRight'].forEach((lobe, li) => {
+    const lobeLabel = ['Left Lobe', 'Ctr Lobe', 'Right Lobe'][li];
+    const arr = Array.isArray(colorParts[lobe]) ? colorParts[lobe] : Array(5).fill(colorParts[lobe]);
+    arr.forEach((c, si) => parts.push({ label: `${lobeLabel} ${si + 1}`, color: c }));
+  });
+  const grid = document.createElement('div');
+  grid.className = 'ft-color-grid';
+  parts.forEach(({ label, color }) => {
+    const cell = document.createElement('div');
+    cell.className = 'ft-color-cell';
+    const dot = document.createElement('div');
+    dot.className = 'ft-color-dot';
+    dot.style.backgroundColor = color || '#888';
+    const lbl = document.createElement('span');
+    lbl.className = 'ft-color-label';
+    lbl.textContent = label;
+    cell.appendChild(dot);
+    cell.appendChild(lbl);
+    grid.appendChild(cell);
+  });
+  return grid;
+}
+
+function renderFishPreview(colorParts, displayRadius = 15) {
+  const W = 130, H = 74;
+  const cvs = document.createElement('canvas');
+  cvs.width = W;
+  cvs.height = H;
+  const pctx = cvs.getContext('2d');
+
+  // Transparent dark background
+  pctx.fillStyle = 'rgba(7,17,30,0.55)';
+  pctx.fillRect(0, 0, W, H);
+
+  // Build a temporary Fish at the canvas center with stable drawing state
+  const tempFish = new Fish(
+    W / 2 - 6, H / 2,    // x, y — slightly left of center so head’s not clipped
+    0, 0,
+    displayRadius,
+    colorParts,
+    '', true, null, 'female', false, false, true, null, displayRadius
+  );
+
+  // Force a clean, straight, non-wiggling pose
+  tempFish.drawAngle = 0;   // facing right
+  tempFish.prevAngle = 0;
+  tempFish.angle1 = 0; tempFish.angle2 = 0; tempFish.angle2b = 0;
+  tempFish.angle3 = Math.PI; tempFish.angle4 = Math.PI;
+  tempFish.angle5 = Math.PI; tempFish.angle6 = Math.PI;
+  tempFish.tailWorldAngle = Math.PI;
+  tempFish.wiggleCycle = 0;
+  tempFish.smoothAmpFactor = 0;
+  tempFish.currentSpeed = 0;
+  tempFish.currentFlare = 0.72;
+  tempFish.finAngle = 0.05;
+  tempFish.kickAmp = 0;
+  tempFish.snatchTimer = 0;
+  tempFish.smoothTurnRate = 0;
+
+  tempFish.draw(pctx, false);
+  return cvs.toDataURL();
+}
+
+function makeCompactColorRow(colorParts) {
+  const row = document.createElement('div');
+  row.className = 'ft-compact-colors';
+  const scalarParts = ['head', 'body', 's1', 's2', 'leftFin', 'rightFin'];
+  scalarParts.forEach(part => {
+    const d = document.createElement('div');
+    d.className = 'ft-color-dot';
+    d.style.backgroundColor = colorParts[part] || '#888';
+    d.title = part;
+    row.appendChild(d);
+  });
+  ['tailLeft', 'tailCenter', 'tailRight'].forEach(lobe => {
+    const arr = Array.isArray(colorParts[lobe]) ? colorParts[lobe] : Array(5).fill(colorParts[lobe]);
+    arr.forEach(c => {
+      const d = document.createElement('div');
+      d.className = 'ft-color-dot';
+      d.style.backgroundColor = c || '#888';
+      row.appendChild(d);
+    });
+  });
+  return row;
+}
+
+function getAncestorLabel(depth, side) {
+  if (depth === 0) return '';
+  if (depth === 1) return side === 'mother' ? 'Mother' : 'Father';
+  const prefix = depth > 2 ? 'Great-'.repeat(depth - 2) : '';
+  return prefix + (side === 'mother' ? 'Grandmother' : 'Grandfather');
+}
+
+function buildFamilyTreeNode(data, depth, side) {
+  const item = document.createElement('div');
+  item.className = 'ft-tree-item';
+  if (depth === 0) item.classList.add('ft-tree-root');
+
+  const label = getAncestorLabel(depth, side);
+  const genderSym = data.gender === 'female' ? ' ♀' : ' ♂';
+
+  // Card — flex-row: thumbnail on left, content on right
+  const card = document.createElement('div');
+  card.className = 'ft-tree-card';
+  if (depth === 0) card.classList.add('ft-tree-card--root');
+  else if (depth === 1) card.classList.add('ft-tree-card--parent');
+  else card.classList.add('ft-tree-card--ancestor');
+
+  // LEFT: fish preview thumbnail
+  const previewSrc = renderFishPreview(data.colorParts);
+  const fishImg = document.createElement('img');
+  fishImg.src = previewSrc;
+  fishImg.className = 'ft-fish-preview';
+  fishImg.alt = (data.name || 'Fish') + ' preview';
+  card.appendChild(fishImg);
+
+  // RIGHT: content body (header + color info)
+  const cardBody = document.createElement('div');
+  cardBody.className = 'ft-tree-card-body';
+
+  // Header row: body dot + name + role + optional toggle
+  const header = document.createElement('div');
+  header.className = 'ft-tree-card-header';
+
+  const dot = document.createElement('div');
+  dot.className = 'ft-body-dot';
+  const dotSz = Math.max(10, 18 - depth * 2) + 'px';
+  dot.style.width = dotSz;
+  dot.style.height = dotSz;
+  dot.style.backgroundColor = data.colorParts?.body || '#888';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'ft-tree-name';
+  nameEl.textContent = (data.name || 'Unnamed') + genderSym;
+
+  header.appendChild(dot);
+  header.appendChild(nameEl);
+
+  if (label) {
+    const roleEl = document.createElement('span');
+    roleEl.className = 'ft-tree-role';
+    roleEl.textContent = label;
+    header.appendChild(roleEl);
+  }
+
+  cardBody.appendChild(header);
+
+  // Color info: full grid for child, compact dot-row for ALL ancestors
+  if (depth === 0) {
+    cardBody.appendChild(makeFishColorGrid(data.colorParts));
+  } else {
+    cardBody.appendChild(makeCompactColorRow(data.colorParts));
+  }
+
+  card.appendChild(cardBody);
+  item.appendChild(card);
+
+  // Recurse into parents with collapse toggle
+  if (data.parentInfo) {
+    const childrenEl = document.createElement('div');
+    childrenEl.className = 'ft-tree-children';
+    childrenEl.appendChild(buildFamilyTreeNode(data.parentInfo.mother, depth + 1, 'mother'));
+    childrenEl.appendChild(buildFamilyTreeNode(data.parentInfo.father, depth + 1, 'father'));
+
+    // Parents (depth 0 children) start expanded, grandparents+ start collapsed
+    const startCollapsed = depth >= 1;
+    childrenEl.style.display = startCollapsed ? 'none' : '';
+    childrenEl.style.overflow = 'hidden';
+
+    // Collapse toggle button — appended into the already-built header
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'ft-tree-toggle';
+    toggleBtn.textContent = startCollapsed ? '▸' : '▾';
+    toggleBtn.title = startCollapsed ? 'Show ancestors' : 'Hide ancestors';
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isCollapsed = childrenEl.style.display === 'none';
+      childrenEl.style.display = isCollapsed ? '' : 'none';
+      toggleBtn.textContent = isCollapsed ? '▾' : '▸';
+      toggleBtn.title = isCollapsed ? 'Hide ancestors' : 'Show ancestors';
+    });
+    header.appendChild(toggleBtn); // safe to append even after header is in DOM
+
+    item.appendChild(childrenEl);
+  }
+
+  return item;
+}
+
+function openFamilyTree(fish) {
+  const overlay = document.getElementById('family-tree-overlay');
+  if (!overlay) return;
+
+  const content = overlay.querySelector('#ft-tree-content');
+  if (!content) return;
+
+  content.innerHTML = '';
+
+  const selfData = {
+    name: fish.name || 'Unnamed',
+    gender: fish.gender,
+    colorParts: fish.colorParts,
+    radius: fish.radius,
+    parentInfo: fish.parentInfo || null
+  };
+
+  content.appendChild(buildFamilyTreeNode(selfData, 0, null));
+  overlay.classList.add('open');
+}
+
+function closeFamilyTree() {
+  const overlay = document.getElementById('family-tree-overlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
 // ============================================================
 // ACTIVE SYSTEMS
 // ============================================================
@@ -766,6 +1129,7 @@ window.addEventListener("resize", function () {
 let fishes = [];
 let foods = [];
 let ripples = [];
+let heartParticles = [];
 
 // ============================================================
 // MOUSE TRACKING
@@ -827,7 +1191,9 @@ function init() {
   const activeNamedProfiles = settings.fishProfiles.filter(p => p.active !== false);
   activeNamedProfiles.forEach((profile) => {
     const { x, y, vx, vy } = getRandomSpawnPos(maxAttempts);
-    fishes.push(new Fish(x, y, vx, vy, profile.size || settings.fishSize, profile.color || settings.fishColor, profile.name, profile.visible !== false, profile.id));
+    const spawnedFish = new Fish(x, y, vx, vy, profile.size || settings.fishSize, profile.color || settings.fishColor, profile.name, profile.visible !== false, profile.id, profile.gender, profile.breedingEnabled, profile.isBred, profile.isMature !== false, profile.birthTime, profile.targetRadius);
+    if (profile.parentInfo) spawnedFish.parentInfo = profile.parentInfo;
+    fishes.push(spawnedFish);
   });
 
   // 2. Spawn visible unnamed fishes
@@ -915,15 +1281,128 @@ function animate() {
 
   // 4. Resolve physics & feeding
   const visibleFishes = fishes.filter(f => f.visible !== false);
-  resolveCollisions(visibleFishes);
+  resolveCollisions(visibleFishes, fishes.length < settings.fishCount);
   checkFeeding(visibleFishes, foods, ripples);
 
+  // 4b. Update and draw heart particles
+  for (let i = heartParticles.length - 1; i >= 0; i--) {
+    heartParticles[i].update();
+    heartParticles[i].draw(ctx);
+    if (heartParticles[i].alpha <= 0) {
+      heartParticles.splice(i, 1);
+    }
+  }
+
   // 5. Update & draw fishes
-  for (let i = 0; i < fishes.length; i++) {
+  const isSettingsOpen = document.getElementById("settings-panel")?.classList.contains("open") || false;
+  for (let i = fishes.length - 1; i >= 0; i--) {
     const fish = fishes[i];
+    
+    // Spawn heart particles during breeding
+    if (fish.visible !== false && fish.isBreeding && Math.random() < 0.15) {
+      heartParticles.push(new HeartParticle(fish.x, fish.y));
+    }
+    
+    // Check if breeding finished and spawn baby
+    if (fish.isBreeding && fish.breedingTimer <= 0) {
+      if (!fish.breedingPartner) {
+        fish.isBreeding = false;
+        fish.breedingPartner = null;
+        fish.breedingCooldown = 1800;
+      } else if (fish.gender === 'female') {
+        const mother = fish;
+        const father = fish.breedingPartner;
+        
+        const babyX = (mother.x + father.x) * 0.5;
+        const babyY = (mother.y + father.y) * 0.5;
+        
+        const babyVx = randomRange(-0.5, 0.5);
+        const babyVy = randomRange(-0.5, 0.5);
+        
+        const childColorParts = {};
+        // Scalar parts: each part inherits from one parent at random
+        const scalarParts = ['head', 'body', 's1', 's2', 'leftFin', 'rightFin'];
+        scalarParts.forEach(part => {
+          childColorParts[part] = Math.random() < 0.5 ? mother.colorParts[part] : father.colorParts[part];
+        });
+        // Tail lobe parts: each of the 5 segments independently picks from either parent
+        const tailParts = ['tailLeft', 'tailCenter', 'tailRight'];
+        tailParts.forEach(lobe => {
+          const mArr = mother.colorParts[lobe];
+          const fArr = father.colorParts[lobe];
+          childColorParts[lobe] = Array.from({ length: 5 }, (_, i) =>
+            Math.random() < 0.5 ? mArr[i] : fArr[i]
+          );
+        });
+        
+        const motherTargetSize = mother.targetRadius || mother.radius;
+        const fatherTargetSize = father.targetRadius || father.radius;
+        const minSize = Math.min(motherTargetSize, fatherTargetSize);
+        const maxSize = Math.max(motherTargetSize, fatherTargetSize);
+        const childTargetRadius = randomRange(minSize, maxSize);
+        
+        const baby = new Fish(
+          babyX, babyY, babyVx, babyVy, 
+          6, // starting baby radius
+          childColorParts, 
+          "", 
+          true, 
+          null, 
+          null, 
+          true, 
+          true, // isBred
+          false, // isMature = false
+          Date.now(),
+          childTargetRadius
+        );
+        
+        baby.targetRadius = childTargetRadius;
+        baby.breedingCooldown = 1800; // newborn cooldown before breeding (30s)
+
+        // Snapshot parent info for the family tree overlay — include each parent's own ancestry
+        baby.parentInfo = {
+          mother: {
+            id: mother.id,
+            name: mother.name || 'Unnamed',
+            gender: mother.gender,
+            colorParts: JSON.parse(JSON.stringify(mother.colorParts)),
+            radius: motherTargetSize,
+            parentInfo: mother.parentInfo ? JSON.parse(JSON.stringify(mother.parentInfo)) : null
+          },
+          father: {
+            id: father.id,
+            name: father.name || 'Unnamed',
+            gender: father.gender,
+            colorParts: JSON.parse(JSON.stringify(father.colorParts)),
+            radius: fatherTargetSize,
+            parentInfo: father.parentInfo ? JSON.parse(JSON.stringify(father.parentInfo)) : null
+          }
+        };
+        
+        fishes.push(baby);
+        
+        // Heart burst!
+        for (let h = 0; h < 15; h++) {
+          heartParticles.push(new HeartParticle(babyX, babyY));
+        }
+        
+        // Clean up breeding state for both parents
+        mother.isBreeding = false;
+        mother.breedingPartner = null;
+        mother.breedingCooldown = 1800;
+        
+        father.isBreeding = false;
+        father.breedingPartner = null;
+        father.breedingCooldown = 1800;
+        
+        saveFishProfiles();
+        renderFishList();
+      }
+    }
+    
     if (fish.visible !== false) {
       fish.update(canvas, foods, mouse, mouseIdleFrames);
-      fish.draw(ctx);
+      fish.draw(ctx, isSettingsOpen);
     } else {
       fish.update(canvas, [], { x: undefined, y: undefined }, 9999);
     }
@@ -938,3 +1417,11 @@ syncSettingsUI();
 initSettingsUI();
 init();
 animate();
+
+// Family tree overlay: close on backdrop click or Escape key
+document.getElementById('family-tree-overlay')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeFamilyTree();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeFamilyTree();
+});

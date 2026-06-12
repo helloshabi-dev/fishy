@@ -1,6 +1,6 @@
 {
   "name": "fishy-wallpaper",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Interactive Live Fish Wallpaper for Windows and macOS",
   "main": "main.js",
   "author": {

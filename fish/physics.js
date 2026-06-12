@@ -114,6 +114,11 @@ export function checkFeeding(fishes, foods) {
         foods.splice(j, 1);
         // Set eating cooldown (3 to 5 seconds at 60 FPS) to give other fish a chance!
         fish.eatCooldown = Math.floor(randomRange(180, 300));
+        
+        // Trigger snatch movement
+        if (typeof fish.triggerSnatch === 'function') {
+          fish.triggerSnatch();
+        }
         break;
       }
     }
