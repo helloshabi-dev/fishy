@@ -731,7 +731,158 @@
         color: #f1f5f9;
       }
 
+      .ft-meta-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin: 6px 0 6px 0;
+        padding-top: 6px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .ft-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .ft-meta-item strong {
+        color: #f1f5f9;
+      }
+
+      /* ============================================================
+         SHARE & IMPORT PREMIUM GLASSMORPHIC UI
+         ============================================================ */
+      .share-modal-content {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        color: var(--text-main);
+      }
+      .modal-description {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+      .share-preview-card {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      .share-preview-img-container {
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+      .share-preview-img {
+        width: 90px;
+        height: 90px;
+        object-fit: contain;
+        display: block;
+      }
+      .share-preview-info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        text-align: center;
+        width: 100%;
+      }
+      .share-preview-name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #f1f5f9;
+      }
+      .share-preview-meta {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+      .share-code-area {
+        width: 100%;
+        height: 100px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        color: #cbd5e1;
+        font-family: monospace;
+        font-size: 0.72rem;
+        padding: 10px;
+        resize: none;
+        outline: none;
+        word-break: break-all;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      .share-code-area:focus {
+        border-color: #f0654e;
+        background: rgba(0, 0, 0, 0.35);
+      }
+      .modal-primary-btn {
+        width: 100%;
+        padding: 11px 20px;
+        border-radius: 12px;
+        background: #f0654e;
+        color: white;
+        border: none;
+        font-family: inherit;
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: 0 4px 15px rgba(240, 101, 78, 0.3);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .modal-primary-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        background: #f17662;
+        box-shadow: 0 6px 20px rgba(240, 101, 78, 0.45);
+      }
+      .modal-primary-btn:active:not(:disabled) {
+        transform: translateY(0);
+      }
+      .modal-primary-btn:disabled {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.3);
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .modal-primary-btn.copied {
+        background: #10b981 !important;
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3) !important;
+      }
+      .import-status {
+        font-size: 0.78rem;
+        font-weight: 500;
+        margin-top: -6px;
+        text-align: center;
+      }
+      .import-status.success { color: #34d399; }
+      .import-status.error { color: #f87171; }
+      .import-status.empty { color: var(--text-muted); opacity: 0.7; }
+
     </style>
+
   </head>
   <body>
     <!-- Gear Toggle Button -->
@@ -815,6 +966,24 @@
           </svg>
           + Add New Fish
         </button>
+
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button type="button" class="add-fish-btn" id="import-fish-btn" style="flex: 1; margin-top: 0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Import
+          </button>
+          <button type="button" class="add-fish-btn" id="open-folder-btn" style="flex: 1; margin-top: 0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            Profiles Folder
+          </button>
+        </div>
+
         
         <!-- Saved Fish Library (Inactive Named Fish) -->
         <div id="inactive-fish-section" style="margin-top: 20px; display: none;">
@@ -945,6 +1114,20 @@
         <div id="ft-tree-content" class="ft-tree-content"></div>
       </div>
     </div>
+
+    <!-- Share & Import Overlay -->
+    <div class="ft-overlay" id="share-modal-overlay" aria-modal="true" role="dialog" aria-label="Share or Import Fish">
+      <div class="ft-modal" style="width: min(420px, 94vw);">
+        <div class="ft-modal-header">
+          <div class="ft-modal-title" id="share-modal-title">📤 Share Fish Profile</div>
+          <button class="ft-close-btn" id="share-close-btn" title="Close" onclick="(function(){ const o=document.getElementById('share-modal-overlay'); if(o) o.classList.remove('open'); })()">✕</button>
+        </div>
+        <div id="share-modal-content" class="share-modal-content">
+          <!-- Dynamically populated by renderShareView or renderImportView in main.js -->
+        </div>
+      </div>
+    </div>
+
 
     <canvas id="canvas"></canvas>
     <script type="module" src="fish/main.js"></script>

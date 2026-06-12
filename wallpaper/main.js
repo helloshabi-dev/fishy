@@ -1,5 +1,6 @@
-const { app, BrowserWindow, screen, globalShortcut, ipcMain } = require('electron');
+const { app, BrowserWindow, screen, globalShortcut, ipcMain, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let mainWindow;
 
@@ -96,6 +97,123 @@ app.whenReady().then(() => {
       });
     }
   });
+
+  // Profiles Folder Directory & IPC Handlers
+  const profilesDir = path.join(app.getPath('userData'), 'profiles');
+  if (!fs.existsSync(profilesDir)) {
+    fs.mkdirSync(profilesDir, { recursive: true });
+  }
+
+  ipcMain.on('open-profiles-folder', () => {
+    shell.openPath(profilesDir);
+  });
+
+  ipcMain.handle('save-profile-file', async (event, profile) => {
+    try {
+      const safeName = (profile.name || 'Fish').replace(/[^a-zA-Z0-9_-]/g, '_');
+      
+      // 1. Determine a unique, collision-free filename
+      let baseName = safeName;
+      let counter = 1;
+      let newFilename = `${baseName}.json`;
+      let newFilePath = path.join(profilesDir, newFilename);
+
+      while (fs.existsSync(newFilePath)) {
+        try {
+          const existingData = JSON.parse(fs.readFileSync(newFilePath, 'utf8'));
+          if (existingData.id === profile.id) {
+            // It's the same fish, safe to overwrite
+            break;
+          }
+        } catch (e) {
+          // If file is corrupted, safe to overwrite
+          break;
+        }
+        // Collision with a different fish! Suffix it
+        counter++;
+        newFilename = `${baseName}_${counter}.json`;
+        newFilePath = path.join(profilesDir, newFilename);
+      }
+
+      // 2. Clean up any old files that belonged to this fish ID (e.g. from renaming)
+      const files = fs.readdirSync(profilesDir);
+      for (const file of files) {
+        if (file.endsWith('.json') && file !== newFilename) {
+          const filePath = path.join(profilesDir, file);
+          try {
+            const data = fs.readFileSync(filePath, 'utf8');
+            const parsed = JSON.parse(data);
+            if (parsed && parsed.id === profile.id) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (e) {
+            // Ignore corrupted/read-error files
+          }
+        }
+      }
+
+      fs.writeFileSync(newFilePath, JSON.stringify(profile, null, 2), 'utf8');
+      return { success: true, filename: newFilename };
+    } catch (err) {
+      console.error('Failed to save profile file:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('delete-profile-file', async (event, id) => {
+    try {
+      const files = fs.readdirSync(profilesDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          const filePath = path.join(profilesDir, file);
+          try {
+            const data = fs.readFileSync(filePath, 'utf8');
+            const parsed = JSON.parse(data);
+            if (parsed && parsed.id === id) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (e) {
+            // Ignore
+          }
+        }
+      }
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to delete profile file:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('load-profile-files', async () => {
+    try {
+      if (!fs.existsSync(profilesDir)) {
+        fs.mkdirSync(profilesDir, { recursive: true });
+      }
+      const profiles = [];
+      const files = fs.readdirSync(profilesDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          try {
+            const data = fs.readFileSync(path.join(profilesDir, file), 'utf8');
+            const profile = JSON.parse(data);
+            if (profile) {
+              if (!profile.id) {
+                profile.id = 'fish_' + Math.random().toString(36).substr(2, 9);
+              }
+              profiles.push(profile);
+            }
+          } catch (e) {
+             console.error(`Failed to parse profile file ${file}:`, e);
+          }
+        }
+      }
+      return profiles;
+    } catch (err) {
+      console.error('Failed to load profile files:', err);
+      return [];
+    }
+  });
+
 
   // Poll global cursor position and send to the web contents for interactive fish movement
   const mousePollInterval = setInterval(() => {

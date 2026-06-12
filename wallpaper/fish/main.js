@@ -44,6 +44,52 @@ const settings = {
   schoolingCohesion: parseFloat(localStorage.getItem("fishy_schoolingCohesion") || "0.8")
 };
 
+let detectedCity = localStorage.getItem('fishy_birthCity') || '';
+let detectedCountryCode = localStorage.getItem('fishy_birthCountryCode') || '';
+
+async function detectCity() {
+  if (detectedCity && detectedCountryCode) return;
+  try {
+    const res = await fetch('https://freeipapi.com/api/json');
+    const data = await res.json();
+    if (data && data.cityName) {
+      detectedCity = data.cityName;
+      detectedCountryCode = data.countryCode || '';
+      localStorage.setItem('fishy_birthCity', detectedCity);
+      localStorage.setItem('fishy_birthCountryCode', detectedCountryCode);
+      return;
+    }
+  } catch (e) {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      const data = await res.json();
+      if (data && data.city) {
+        detectedCity = data.city;
+        detectedCountryCode = data.country_code || '';
+        localStorage.setItem('fishy_birthCity', detectedCity);
+        localStorage.setItem('fishy_birthCountryCode', detectedCountryCode);
+        return;
+      }
+    } catch (err) {
+      console.warn('Failed to detect city:', err);
+    }
+  }
+}
+detectCity();
+
+function getFlagEmoji(countryCode) {
+  if (!countryCode) return '';
+  try {
+    const codePoints = countryCode
+      .toUpperCase()
+      .split('')
+      .map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  } catch (e) {
+    return '';
+  }
+}
+
 // Utility to convert hex colors to RGBA with dynamic opacity
 function hexToRgba(hex, alpha) {
   const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
@@ -100,6 +146,8 @@ function saveFishProfiles() {
     isBred: fish.isBred,
     isMature: fish.isMature,
     birthTime: fish.birthTime,
+    birthCity: fish.birthCity || null,
+    birthCountryCode: fish.birthCountryCode || null,
     targetRadius: fish.targetRadius,
     parentInfo: fish.parentInfo || null
   }));
@@ -120,6 +168,8 @@ function saveFishProfiles() {
         isBred: activeFish.isBred,
         isMature: activeFish.isMature,
         birthTime: activeFish.birthTime,
+        birthCity: activeFish.birthCity || null,
+        birthCountryCode: activeFish.birthCountryCode || null,
         targetRadius: activeFish.targetRadius,
         parentInfo: activeFish.parentInfo || null
       };
@@ -147,6 +197,15 @@ function saveFishProfiles() {
   const visibleUnnamedCount = fishes.filter(fish => (!fish.name || fish.name.trim() === '') && fish.visible !== false).length;
   settings.visibleUnnamedCount = visibleUnnamedCount;
   localStorage.setItem('fishy_visibleUnnamedCount', visibleUnnamedCount);
+
+  // Save named profiles to files in the profiles folder
+  if (window.electronAPI && window.electronAPI.saveProfileFile) {
+    mergedProfiles.forEach(p => {
+      if (p.name && p.name.trim() !== '') {
+        window.electronAPI.saveProfileFile(p);
+      }
+    });
+  }
 }
 
 // Renders the per-fish color, name, visibility, size + delete controls in the settings panel
@@ -192,11 +251,11 @@ function renderFishList() {
     const thumbnail = document.createElement('img');
     thumbnail.className = 'settings-fish-thumbnail';
     thumbnail.src = renderFishPreview(fish.colorParts, 14);
-    thumbnail.title = 'Click thumbnail or swatch to change color';
+    thumbnail.title = 'Click to view fish profile details';
     thumbnail.style.cursor = 'pointer';
     thumbnail.addEventListener('click', (e) => {
       e.stopPropagation();
-      colorInput.click();
+      openFamilyTree(fish);
     });
 
     // Name Input
@@ -258,6 +317,25 @@ function renderFishList() {
       renderFishList();
     });
 
+    // Share Button
+    const shareBtn = document.createElement('button');
+    shareBtn.type = 'button';
+    shareBtn.className = 'fish-action-btn';
+    shareBtn.title = 'Share Fish Profile';
+    shareBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18" cy="5" r="3"></circle>
+        <circle cx="6" cy="12" r="3"></circle>
+        <circle cx="18" cy="19" r="3"></circle>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+      </svg>
+    `;
+    shareBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openShareModal(fish);
+    });
+
     // Delete Button
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -280,37 +358,12 @@ function renderFishList() {
     });
 
     row1.appendChild(thumbnail);
-
-    // Family Tree Button — only shown for bred fish
-    if (fish.isBred && fish.parentInfo) {
-      const treeBtn = document.createElement('button');
-      treeBtn.type = 'button';
-      treeBtn.className = 'fish-action-btn';
-      treeBtn.style.fontSize = '0.88rem';
-      treeBtn.style.display = 'flex';
-      treeBtn.style.alignItems = 'center';
-      treeBtn.style.justifyContent = 'center';
-      treeBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="5" r="3"></circle>
-          <circle cx="6" cy="18" r="3"></circle>
-          <circle cx="18" cy="18" r="3"></circle>
-          <path d="M12 8v4M6 18v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"></path>
-        </svg>
-      `;
-      treeBtn.title = 'View Family Tree';
-      treeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openFamilyTree(fish);
-      });
-      row1.appendChild(treeBtn);
-    }
-
     row1.appendChild(swatch);
     row1.appendChild(colorInput);
     row1.appendChild(nameInput);
     row1.appendChild(genderBtn);
     row1.appendChild(breedingBtn);
+    row1.appendChild(shareBtn);
     row1.appendChild(deleteBtn);
 
     // Row 2: Size Slider
@@ -378,7 +431,12 @@ function renderFishList() {
         thumbnail.className = 'settings-fish-thumbnail';
         thumbnail.src = renderFishPreview(p.color, 14);
         thumbnail.alt = 'Fish thumbnail';
-        thumbnail.style.cursor = 'default';
+        thumbnail.style.cursor = 'pointer';
+        thumbnail.title = 'Click to view fish profile details';
+        thumbnail.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openFamilyTree(p);
+        });
 
         // Static name label
         const nameLabel = document.createElement('span');
@@ -416,11 +474,30 @@ function renderFishList() {
         addBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           const { x, y, vx, vy } = getRandomSpawnPos(150);
-          const restoredFish = new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id, p.gender, p.breedingEnabled, p.isBred, p.isMature !== false, p.birthTime, p.targetRadius);
+          const restoredFish = new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id, p.gender, p.breedingEnabled, p.isBred, p.isMature !== false, p.birthTime, p.targetRadius, p.birthCity || null);
           if (p.parentInfo) restoredFish.parentInfo = p.parentInfo;
           fishes.push(restoredFish);
           saveFishProfiles();
           renderFishList();
+        });
+
+        // Share Button for Inactive Library Fish
+        const shareBtn = document.createElement('button');
+        shareBtn.type = 'button';
+        shareBtn.className = 'fish-action-btn';
+        shareBtn.title = 'Share Fish Profile';
+        shareBtn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+        `;
+        shareBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openShareModal(p);
         });
 
         // Delete Permanently Button
@@ -438,40 +515,19 @@ function renderFishList() {
         `;
         deleteBtn.addEventListener('click', (e) => {
           e.stopPropagation();
+          const profileId = p.id;
           settings.fishProfiles = settings.fishProfiles.filter(profile => profile.id !== p.id);
           localStorage.setItem('fishy_fishProfiles', JSON.stringify(settings.fishProfiles));
+          if (window.electronAPI && window.electronAPI.deleteProfileFile) {
+            window.electronAPI.deleteProfileFile(profileId);
+          }
           renderFishList();
         });
 
         row.appendChild(thumbnail);
         row.appendChild(nameLabel);
         row.appendChild(genderSpan);
-
-        // Family Tree Button — shown for bred saved fish
-        if (p.isBred && p.parentInfo) {
-          const treeBtn = document.createElement('button');
-          treeBtn.type = 'button';
-          treeBtn.className = 'fish-action-btn';
-          treeBtn.style.fontSize = '0.88rem';
-          treeBtn.style.display = 'flex';
-          treeBtn.style.alignItems = 'center';
-          treeBtn.style.justifyContent = 'center';
-          treeBtn.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="5" r="3"></circle>
-              <circle cx="6" cy="18" r="3"></circle>
-              <circle cx="18" cy="18" r="3"></circle>
-              <path d="M12 8v4M6 18v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"></path>
-            </svg>
-          `;
-          treeBtn.title = 'View Family Tree';
-          treeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openFamilyTree(p);
-          });
-          row.appendChild(treeBtn);
-        }
-
+        row.appendChild(shareBtn);
         row.appendChild(addBtn);
         row.appendChild(deleteBtn);
         item.appendChild(row);
@@ -590,11 +646,11 @@ function adjustFishCount(targetCount) {
       const { x, y, vx, vy } = getRandomSpawnPos(150);
       if (inactiveProfiles.length > 0) {
         const p = inactiveProfiles[0];
-        const restoredFish = new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id, p.gender, p.breedingEnabled, p.isBred, p.isMature !== false, p.birthTime, p.targetRadius);
+        const restoredFish = new Fish(x, y, vx, vy, p.size || settings.fishSize, p.color || settings.fishColor, p.name, p.visible !== false, p.id, p.gender, p.breedingEnabled, p.isBred, p.isMature !== false, p.birthTime, p.targetRadius, p.birthCity || null, p.birthCountryCode || null);
         if (p.parentInfo) restoredFish.parentInfo = p.parentInfo;
         fishes.push(restoredFish);
       } else {
-        fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null));
+        fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null, null, true, false, true, null, null, detectedCity || null, detectedCountryCode || null));
       }
     }
   } else if (fishes.length > targetCount) {
@@ -732,7 +788,7 @@ function initSettingsUI() {
     addFishBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const { x, y, vx, vy } = getRandomSpawnPos(150);
-      fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null));
+      fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null, null, true, false, true, null, null, detectedCity || null));
       saveFishProfiles();
       renderFishList();
     });
@@ -926,6 +982,26 @@ function initSettingsUI() {
   // Bootstrap initial autostart configuration to main process
   if (window.electronAPI && window.electronAPI.setAutoStart) {
     window.electronAPI.setAutoStart(settings.autoStart);
+  }
+
+  // Import Fish Profile button listener
+  const importBtn = document.getElementById("import-fish-btn");
+  if (importBtn) {
+    importBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openImportModal();
+    });
+  }
+
+  // Open Profiles Folder button listener
+  const openFolderBtn = document.getElementById("open-folder-btn");
+  if (openFolderBtn) {
+    openFolderBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (window.electronAPI && window.electronAPI.openProfilesFolder) {
+        window.electronAPI.openProfilesFolder();
+      }
+    });
   }
 
   // Keyboard shortcut listener to toggle panel
@@ -1147,7 +1223,7 @@ function buildFamilyTreeNode(data, depth, side) {
 
   const nameEl = document.createElement('span');
   nameEl.className = 'ft-tree-name';
-  nameEl.textContent = (data.name || 'Unnamed') + genderSym;
+  nameEl.textContent = (data.name || 'Fish') + genderSym;
 
   header.appendChild(dot);
   header.appendChild(nameEl);
@@ -1163,6 +1239,50 @@ function buildFamilyTreeNode(data, depth, side) {
 
   // Color info: full grid for child, compact dot-row for ALL ancestors
   if (depth === 0) {
+    // Metadata row: Size & DOB
+    const metaRow = document.createElement('div');
+    metaRow.className = 'ft-meta-info';
+
+    // Format Size
+    const sizeVal = data.radius || data.size;
+    const sizeText = sizeVal ? `${sizeVal.toFixed(1)}px` : 'Unknown';
+    const sizeEl = document.createElement('span');
+    sizeEl.className = 'ft-meta-item';
+    sizeEl.innerHTML = `📏 <strong>Size:</strong> ${sizeText}`;
+    metaRow.appendChild(sizeEl);
+
+    // Format Birthday
+    let birthdayText = 'Unknown';
+    if (data.birthTime) {
+      const dobDate = new Date(data.birthTime);
+      birthdayText = dobDate.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+      }).replace(' at ', ' ');
+    } else if (data.isBred) {
+      birthdayText = 'Bred (Unknown Date)';
+    }
+    const dobEl = document.createElement('span');
+    dobEl.className = 'ft-meta-item';
+    dobEl.innerHTML = `🎂 <strong>Birthday:</strong> ${birthdayText}`;
+    metaRow.appendChild(dobEl);
+
+    // Format Birthplace
+    const birthplaceText = data.birthCity || 'Unknown';
+    const flag = getFlagEmoji(data.birthCountryCode);
+    const birthplaceDisplay = flag ? `${flag} ${birthplaceText}` : birthplaceText;
+    const cityEl = document.createElement('span');
+    cityEl.className = 'ft-meta-item';
+    cityEl.innerHTML = `📍 <strong>Birthplace:</strong> ${birthplaceDisplay}`;
+    metaRow.appendChild(cityEl);
+
+    cardBody.appendChild(metaRow);
+
     cardBody.appendChild(makeFishColorGrid(data.colorParts));
   } else {
     cardBody.appendChild(makeCompactColorRow(data.colorParts));
@@ -1233,17 +1353,30 @@ function openFamilyTree(fishOrProfile) {
   const overlay = document.getElementById('family-tree-overlay');
   if (!overlay) return;
 
+  const titleEl = overlay.querySelector('.ft-modal-title');
+  if (titleEl) {
+    if (fishOrProfile.isBred && fishOrProfile.parentInfo) {
+      titleEl.innerHTML = '🐟 Fish Profile & Family Tree';
+    } else {
+      titleEl.innerHTML = '🐟 Fish Profile';
+    }
+  }
+
   const content = overlay.querySelector('#ft-tree-content');
   if (!content) return;
 
   content.innerHTML = '';
 
   const selfData = {
-    name: fishOrProfile.name || 'Unnamed',
+    name: fishOrProfile.name || 'Fish',
     gender: fishOrProfile.gender,
     colorParts: fishOrProfile.colorParts || fishOrProfile.color,
     radius: fishOrProfile.radius || fishOrProfile.size,
-    parentInfo: fishOrProfile.parentInfo || null
+    parentInfo: fishOrProfile.parentInfo || null,
+    birthTime: fishOrProfile.birthTime || null,
+    birthCity: fishOrProfile.birthCity || null,
+    birthCountryCode: fishOrProfile.birthCountryCode || null,
+    isBred: fishOrProfile.isBred || false
   };
 
   content.appendChild(buildFamilyTreeNode(selfData, 0, null));
@@ -1258,6 +1391,251 @@ function openFamilyTree(fishOrProfile) {
 function closeFamilyTree() {
   const overlay = document.getElementById('family-tree-overlay');
   if (overlay) overlay.classList.remove('open');
+}
+
+// ============================================================
+// SHARE & IMPORT INTERACTIONS
+// ============================================================
+
+function encodeFishProfile(fishOrProfile) {
+  const profile = {
+    id: fishOrProfile.id,
+    name: (fishOrProfile.name || '').trim(),
+    colorParts: fishOrProfile.colorParts || fishOrProfile.color,
+    radius: fishOrProfile.radius || fishOrProfile.size,
+    gender: fishOrProfile.gender,
+    breedingEnabled: fishOrProfile.breedingEnabled !== false,
+    isBred: !!fishOrProfile.isBred,
+    isMature: fishOrProfile.isMature !== false,
+    birthTime: fishOrProfile.birthTime || null,
+    birthCity: fishOrProfile.birthCity || null,
+    birthCountryCode: fishOrProfile.birthCountryCode || null,
+    targetRadius: fishOrProfile.targetRadius || fishOrProfile.radius || fishOrProfile.size,
+    parentInfo: fishOrProfile.parentInfo || null
+  };
+  
+  try {
+    const jsonStr = JSON.stringify(profile);
+    const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+    return base64;
+  } catch (e) {
+    console.error('Failed to encode fish profile:', e);
+    return null;
+  }
+}
+
+function decodeFishProfile(base64) {
+  try {
+    const jsonStr = decodeURIComponent(escape(atob(base64)));
+    const profile = JSON.parse(jsonStr);
+    if (profile && typeof profile === 'object' && (profile.colorParts || profile.color)) {
+      if (!profile.colorParts && profile.color) {
+        profile.colorParts = profile.color;
+      }
+      return profile;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function openShareModal(fishOrProfile) {
+  const overlay = document.getElementById('share-modal-overlay');
+  const titleEl = document.getElementById('share-modal-title');
+  const contentEl = document.getElementById('share-modal-content');
+  if (!overlay || !contentEl) return;
+
+  titleEl.innerHTML = '📤 Share Fish Profile';
+  
+  const code = encodeFishProfile(fishOrProfile);
+  const colorParts = fishOrProfile.colorParts || fishOrProfile.color;
+  const name = fishOrProfile.name || 'Fish';
+  const gender = fishOrProfile.gender || 'female';
+  const genderSym = gender === 'male' ? '♂' : '♀';
+  const genderColor = gender === 'male' ? '#60a5fa' : '#f472b6';
+  const previewSrc = renderFishPreview(colorParts, 22);
+
+  contentEl.innerHTML = `
+    <div class="modal-description">
+      Share this unique fish with a friend! Copy the share code below and send it to them.
+    </div>
+    <div class="share-preview-card">
+      <div class="share-preview-img-container">
+        <img class="share-preview-img" src="${previewSrc}" alt="Fish Preview" />
+      </div>
+      <div class="share-preview-info">
+        <span class="share-preview-name">
+          ${name} <span style="color: ${genderColor}">${genderSym}</span>
+        </span>
+        <span class="share-preview-meta">
+          Size: ${(fishOrProfile.radius || fishOrProfile.size || 12).toFixed(1)}px | 
+          ${fishOrProfile.isBred ? 'Bred Generation' : 'Original Genotype'}
+        </span>
+      </div>
+    </div>
+    <textarea class="share-code-area" readonly id="share-code-textarea">${code}</textarea>
+    <button class="modal-primary-btn" id="share-copy-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      Copy Share Code
+    </button>
+  `;
+
+  overlay.classList.add('open');
+
+  const copyBtn = document.getElementById('share-copy-btn');
+  const txtArea = document.getElementById('share-code-textarea');
+  if (copyBtn && txtArea) {
+    copyBtn.addEventListener('click', () => {
+      txtArea.select();
+      navigator.clipboard.writeText(txtArea.value).then(() => {
+        copyBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Copied to Clipboard!
+        `;
+        copyBtn.classList.add('copied');
+        
+        setTimeout(() => {
+          copyBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy Share Code
+          `;
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      });
+    });
+  }
+}
+
+function openImportModal() {
+  const overlay = document.getElementById('share-modal-overlay');
+  const titleEl = document.getElementById('share-modal-title');
+  const contentEl = document.getElementById('share-modal-content');
+  if (!overlay || !contentEl) return;
+
+  titleEl.innerHTML = '📥 Import Fish Profile';
+
+  contentEl.innerHTML = `
+    <div class="modal-description">
+      Paste a fish share code below to inspect its attributes, colors, and genetic lineage before adding it to your pond.
+    </div>
+    <textarea class="share-code-area" id="import-code-textarea" placeholder="Paste Base64 fish share code here..."></textarea>
+    <div id="import-status-msg" class="import-status empty">Waiting for share code...</div>
+    
+    <div id="import-preview-box" style="display: none; width: 100%;">
+      <div class="share-preview-card">
+        <div class="share-preview-img-container">
+          <img class="share-preview-img" id="import-preview-img" src="" alt="Fish Preview" />
+        </div>
+        <div class="share-preview-info">
+          <span class="share-preview-name" id="import-preview-name"></span>
+          <span class="share-preview-meta" id="import-preview-meta"></span>
+        </div>
+      </div>
+    </div>
+    
+    <button class="modal-primary-btn" id="import-submit-btn" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      Import to Pond
+    </button>
+  `;
+
+  overlay.classList.add('open');
+
+  const textInput = document.getElementById('import-code-textarea');
+  const statusMsg = document.getElementById('import-status-msg');
+  const previewBox = document.getElementById('import-preview-box');
+  const previewImg = document.getElementById('import-preview-img');
+  const previewName = document.getElementById('import-preview-name');
+  const previewMeta = document.getElementById('import-preview-meta');
+  const submitBtn = document.getElementById('import-submit-btn');
+
+  let decodedProfile = null;
+
+  textInput.addEventListener('input', () => {
+    const rawVal = textInput.value.trim();
+    if (!rawVal) {
+      statusMsg.className = 'import-status empty';
+      statusMsg.textContent = 'Waiting for share code...';
+      previewBox.style.display = 'none';
+      submitBtn.disabled = true;
+      decodedProfile = null;
+      return;
+    }
+
+    decodedProfile = decodeFishProfile(rawVal);
+    if (decodedProfile) {
+      statusMsg.className = 'import-status success';
+      statusMsg.textContent = '✓ Valid fish profile detected!';
+      
+      const colorParts = decodedProfile.colorParts;
+      previewImg.src = renderFishPreview(colorParts, 22);
+      
+      const genderSym = decodedProfile.gender === 'male' ? '♂' : '♀';
+      const genderColor = decodedProfile.gender === 'male' ? '#60a5fa' : '#f472b6';
+      previewName.innerHTML = `${decodedProfile.name || 'Fish'} <span style="color: ${genderColor}">${genderSym}</span>`;
+      
+      let lineageText = decodedProfile.isBred ? 'Bred Generation' : 'Original Genotype';
+      if (decodedProfile.parentInfo) {
+        lineageText += ' (lineage tree included)';
+      }
+      previewMeta.textContent = `Size: ${decodedProfile.radius.toFixed(1)}px | ${lineageText}`;
+      
+      previewBox.style.display = 'block';
+      submitBtn.disabled = false;
+    } else {
+      statusMsg.className = 'import-status error';
+      statusMsg.textContent = '✗ Invalid share code. Check for typing errors.';
+      previewBox.style.display = 'none';
+      submitBtn.disabled = true;
+      decodedProfile = null;
+    }
+  });
+
+  submitBtn.addEventListener('click', () => {
+    if (!decodedProfile) return;
+
+    decodedProfile.id = 'fish_' + Math.random().toString(36).substr(2, 9);
+    
+    const { x, y, vx, vy } = getRandomSpawnPos(150);
+    const importedFish = new Fish(
+      x, y, vx, vy,
+      decodedProfile.radius || settings.fishSize,
+      decodedProfile.colorParts,
+      decodedProfile.name,
+      decodedProfile.visible !== false,
+      decodedProfile.id,
+      decodedProfile.gender,
+      decodedProfile.breedingEnabled,
+      decodedProfile.isBred,
+      decodedProfile.isMature !== false,
+      decodedProfile.birthTime || Date.now(),
+      decodedProfile.targetRadius,
+      decodedProfile.birthCity || null,
+      decodedProfile.birthCountryCode || null
+    );
+    if (decodedProfile.parentInfo) {
+      importedFish.parentInfo = decodedProfile.parentInfo;
+    }
+    
+    fishes.push(importedFish);
+    saveFishProfiles();
+    renderFishList();
+
+    ripples.push(new Ripple(x, y));
+    overlay.classList.remove('open');
+  });
 }
 
 // ============================================================
@@ -1330,7 +1708,7 @@ function init() {
   if (activeProfiles.length > 0) {
     activeProfiles.forEach((profile) => {
       const { x, y, vx, vy } = getRandomSpawnPos(maxAttempts);
-      const spawnedFish = new Fish(x, y, vx, vy, profile.size || settings.fishSize, profile.color || settings.fishColor, profile.name, profile.visible !== false, profile.id, profile.gender, profile.breedingEnabled, profile.isBred, profile.isMature !== false, profile.birthTime, profile.targetRadius);
+      const spawnedFish = new Fish(x, y, vx, vy, profile.size || settings.fishSize, profile.color || settings.fishColor, profile.name, profile.visible !== false, profile.id, profile.gender, profile.breedingEnabled, profile.isBred, profile.isMature !== false, profile.birthTime, profile.targetRadius, profile.birthCity || null, profile.birthCountryCode || null);
       if (profile.parentInfo) spawnedFish.parentInfo = profile.parentInfo;
       fishes.push(spawnedFish);
     });
@@ -1338,7 +1716,7 @@ function init() {
     // Fallback if no active profiles saved yet
     for (let i = 0; i < settings.fishCount; i++) {
       const { x, y, vx, vy } = getRandomSpawnPos(maxAttempts);
-      fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null));
+      fishes.push(new Fish(x, y, vx, vy, settings.fishSize, settings.fishColor, "", true, null, null, true, false, true, null, null, detectedCity || null, detectedCountryCode || null));
     }
   }
 
@@ -1494,7 +1872,9 @@ function animate() {
           true, // isBred
           false, // isMature = false
           Date.now(),
-          childTargetRadius
+          childTargetRadius,
+          detectedCity || null,
+          detectedCountryCode || null
         );
         
         baby.targetRadius = childTargetRadius;
@@ -1504,18 +1884,26 @@ function animate() {
         baby.parentInfo = {
           mother: {
             id: mother.id,
-            name: mother.name || 'Unnamed',
+            name: mother.name || 'Fish',
             gender: mother.gender,
             colorParts: JSON.parse(JSON.stringify(mother.colorParts)),
             radius: motherTargetSize,
+            birthTime: mother.birthTime || null,
+            isBred: !!mother.isBred,
+            birthCity: mother.birthCity || null,
+            birthCountryCode: mother.birthCountryCode || null,
             parentInfo: mother.parentInfo ? JSON.parse(JSON.stringify(mother.parentInfo)) : null
           },
           father: {
             id: father.id,
-            name: father.name || 'Unnamed',
+            name: father.name || 'Fish',
             gender: father.gender,
             colorParts: JSON.parse(JSON.stringify(father.colorParts)),
             radius: fatherTargetSize,
+            birthTime: father.birthTime || null,
+            isBred: !!father.isBred,
+            birthCity: father.birthCity || null,
+            birthCountryCode: father.birthCountryCode || null,
             parentInfo: father.parentInfo ? JSON.parse(JSON.stringify(father.parentInfo)) : null
           }
         };
@@ -1559,10 +1947,92 @@ initSettingsUI();
 init();
 animate();
 
+// Sync profiles from the disk folder in real-time
+async function loadAndSyncProfilesFromFolder() {
+  if (window.electronAPI && window.electronAPI.loadProfileFiles) {
+    const folderProfiles = await window.electronAPI.loadProfileFiles();
+    
+    // Identify profiles in settings.fishProfiles that are NOT in folderProfiles
+    // and are NOT currently active in the pond, and remove them (since their files were deleted)
+    const activeIds = fishes.map(f => f.id);
+    let updatedProfiles = settings.fishProfiles.filter(p => {
+      if (activeIds.includes(p.id)) return true;
+      if (!p.name || p.name.trim() === '') return true;
+      return folderProfiles.some(fp => fp.id === p.id);
+    });
+
+    let modified = updatedProfiles.length !== settings.fishProfiles.length;
+
+    // Add or update profiles from the folder files
+    folderProfiles.forEach(fp => {
+      const existingIdx = updatedProfiles.findIndex(p => p.id === fp.id);
+      if (existingIdx === -1) {
+        const isActive = fishes.some(f => f.id === fp.id);
+        updatedProfiles.push({
+          ...fp,
+          active: isActive
+        });
+        modified = true;
+      } else {
+        const existing = updatedProfiles[existingIdx];
+        const updated = {
+          ...fp,
+          active: existing.active
+        };
+        if (JSON.stringify(existing) !== JSON.stringify(updated)) {
+          updatedProfiles[existingIdx] = updated;
+          modified = true;
+        }
+      }
+    });
+
+    if (modified) {
+      settings.fishProfiles = updatedProfiles;
+      localStorage.setItem('fishy_fishProfiles', JSON.stringify(updatedProfiles));
+
+      // Update active fish instances dynamically if properties in files changed
+      fishes.forEach(fish => {
+        const fp = folderProfiles.find(p => p.id === fish.id);
+        if (fp) {
+          fish.name = fp.name || '';
+          fish.gender = fp.gender || fish.gender;
+          if (fp.color) {
+            fish.updateColor(fp.color);
+          } else if (fp.colorParts) {
+            fish.updateColor(fp.colorParts);
+          }
+          if (fp.size) {
+            fish.radius = fp.size;
+            fish.targetRadius = fp.targetRadius || fp.size;
+          }
+        }
+      });
+
+      renderFishList();
+    }
+  }
+}
+
+// Start folder sync polling
+setInterval(loadAndSyncProfilesFromFolder, 1500);
+loadAndSyncProfilesFromFolder();
+
 // Family tree overlay: close on backdrop click or Escape key
 document.getElementById('family-tree-overlay')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeFamilyTree();
 });
+
+// Share overlay: close on backdrop click
+document.getElementById('share-modal-overlay')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    document.getElementById('share-modal-overlay').classList.remove('open');
+  }
+});
+
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeFamilyTree();
+  if (e.key === 'Escape') {
+    closeFamilyTree();
+    const shareOverlay = document.getElementById('share-modal-overlay');
+    if (shareOverlay) shareOverlay.classList.remove('open');
+  }
 });

@@ -100,7 +100,12 @@ This runs a headless Electron process to render the fish canvas to `build/icon.p
 
 ## 📜 Version History (Changelog)
 
-### **v3.2.0** (Current Version)
+### **v4.0.0** (Current Version)
+*   **Size-Based Speed Scaling**: Adjusted the fish speed range dynamically according to their size. Larger fish swim faster with more power, while smaller fish (and growing babies) swim at slower, gentler speeds.
+*   **Detailed Fish Profiles on Thumbnail Click**: Click any fish thumbnail in the settings panel to open a clean card displaying its name, gender, size, date of birth (DOB), origin details, and full parentage lineage.
+*   **Fish Configuration Sharing**: Added the ability to export and import fish profiles (DNA/configurations) to easily share your custom-bred fish with friends.
+
+### **v3.2.0**
 *   **Schooling Behavior**: Introduced realistic top-view schooling (flocking) behavior to the fish using Craig Reynolds' Boids algorithm (Cohesion, Alignment, and Separation).
 *   **Customizable Schooling Weights**: Added a "Schooling Behavior" section to the settings panel to toggle schooling and adjust the influence weights of Cohesion, Separation, and Alignment in real-time.
 *   **Pellet-to-Pellet Physics**: Implemented physical collisions for food pellets, pushing overlapping pellets apart with drift-offset compensation and exact spawn jitter protection to prevent visual clustering.

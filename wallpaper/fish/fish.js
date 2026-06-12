@@ -2,13 +2,17 @@
 import { randomRange, normalizeAngle } from "./utils.js";
 
 export class Fish {
-  constructor(x, y, vx, vy, radius, color = "#f0654e", name = "", visible = true, id = null, gender = null, breedingEnabled = true, isBred = false, isMature = true, birthTime = null, targetRadius = null) {
+  constructor(x, y, vx, vy, radius, color = "#f0654e", name = "", visible = true, id = null, gender = null, breedingEnabled = true, isBred = false, isMature = true, birthTime = null, targetRadius = null, birthCity = null, birthCountryCode = null) {
     this.x = x;
     this.y = y;
     this.vx = vx;
     this.vy = vy;
     this.ax = 0;
     this.ay = 0;
+    
+    // Individuality factor for speed variance (some fish are naturally speedier than others)
+    this.speedVariance = randomRange(0.85, 1.15);
+    
     this.radius = radius;
     this.targetRadius = targetRadius || radius;
     this.name = name || "";
@@ -20,6 +24,8 @@ export class Fish {
     this.breedingEnabled = breedingEnabled !== false;
     this.isBred = !!isBred;
     this.birthTime = birthTime || (this.isBred ? Date.now() : null);
+    this.birthCity = birthCity || null;
+    this.birthCountryCode = birthCountryCode || null;
     this.isMature = isMature !== false;
     
     // Evaluate initial maturity from birth timestamp
@@ -36,8 +42,6 @@ export class Fish {
     this.isBreeding = false;
     this.breedingPartner = null;
     this.breedingTimer = 0;
-
-    this.baseMaxSpeed = randomRange(1.5, 2.2); // Calmer speeds suited for a desktop wallpaper
 
     // Movement states - each fish gets a random initial state and timer for individuality
     // Koi are highly active; we make them spawn in active swimming states most of the time
@@ -58,7 +62,6 @@ export class Fish {
       this.targetSpeed = 0.0;
       this.currentSpeed = 0.0;
     }
-    this.maxSpeed = this.baseMaxSpeed;
     this.wanderAngle = randomRange(0, Math.PI * 2);
 
     // Dynamic fin and spine wiggling state
@@ -99,6 +102,22 @@ export class Fish {
 
     // Initialize custom color parts
     this.updateColor(color);
+  }
+
+  get radius() {
+    return this._radius;
+  }
+
+  set radius(val) {
+    this._radius = val;
+    this.updateSpeedRange();
+  }
+
+  updateSpeedRange() {
+    // Dynamic base speed based on size (radius).
+    // Smaller fish swim slower, while larger fish swim faster.
+    this.baseMaxSpeed = (0.6 + 0.35 * Math.sqrt(this._radius || 12)) * (this.speedVariance || 1.0);
+    this.maxSpeed = this.baseMaxSpeed;
   }
 
   updateColor(color) {
@@ -313,7 +332,7 @@ export class Fish {
     const breedingSymbol = this.breedingEnabled ? '💖' : '🖤';
     
     // Text contents
-    const nameStr = this.name ? this.name : 'Unnamed';
+    const nameStr = this.name ? this.name : 'Fish';
     const text = `${nameStr} (${genderSymbol}) ${breedingSymbol}`;
     
     // Measure text

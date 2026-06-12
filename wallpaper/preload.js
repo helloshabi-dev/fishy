@@ -11,5 +11,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onToggleSettingsGlobal: (callback) => ipcRenderer.on('toggle-settings-global', () => callback()),
   setAutoStart: (enabled) => ipcRenderer.send('set-autostart', enabled),
   quitApp: () => ipcRenderer.send('quit-app'),
-  setSettingsPanelOpen: (open) => ipcRenderer.send('set-settings-panel-open', open)
+  setSettingsPanelOpen: (open) => ipcRenderer.send('set-settings-panel-open', open),
+  openProfilesFolder: () => ipcRenderer.send('open-profiles-folder'),
+  saveProfileFile: (profile) => ipcRenderer.invoke('save-profile-file', profile),
+  deleteProfileFile: (id) => ipcRenderer.invoke('delete-profile-file', id),
+  loadProfileFiles: () => ipcRenderer.invoke('load-profile-files')
 });
+
