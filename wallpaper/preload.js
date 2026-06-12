@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onGlobalMouseMove: (callback) => ipcRenderer.on('global-mouse-move', (event, data) => callback(data)),
   onToggleSettingsGlobal: (callback) => ipcRenderer.on('toggle-settings-global', () => callback()),
   setAutoStart: (enabled) => ipcRenderer.send('set-autostart', enabled),
-  quitApp: () => ipcRenderer.send('quit-app')
+  quitApp: () => ipcRenderer.send('quit-app'),
+  setSettingsPanelOpen: (open) => ipcRenderer.send('set-settings-panel-open', open)
 });

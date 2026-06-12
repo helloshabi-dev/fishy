@@ -2,7 +2,7 @@
 import { randomRange, normalizeAngle } from "./utils.js";
 
 export class Fish {
-  constructor(x, y, vx, vy, radius, color = "#f0654e") {
+  constructor(x, y, vx, vy, radius, color = "#f0654e", name = "", visible = true, id = null) {
     this.x = x;
     this.y = y;
     this.vx = vx;
@@ -10,6 +10,9 @@ export class Fish {
     this.ax = 0;
     this.ay = 0;
     this.radius = radius;
+    this.name = name || "";
+    this.visible = visible !== false;
+    this.id = id || 'fish_' + Math.random().toString(36).substr(2, 9);
 
     this.baseMaxSpeed = randomRange(1.5, 2.2); // Calmer speeds suited for a desktop wallpaper
 

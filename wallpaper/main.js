@@ -7,12 +7,11 @@ function createWallpaperWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
-  mainWindow = new BrowserWindow({
+  const winOptions = {
     width: width,
     height: height,
     x: 0,
     y: 0,
-    type: 'desktop', // This is key: it tells the OS to treat this window as a desktop wallpaper
     frame: false,
     transparent: true,
     hasShadow: false,
@@ -28,7 +27,13 @@ function createWallpaperWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     }
-  });
+  };
+
+  if (process.platform === 'win32') {
+    winOptions.type = 'desktop';
+  }
+
+  mainWindow = new BrowserWindow(winOptions);
 
   // Make it cover the absolute entire screen, not just the work area (ignoring taskbars/menu bars)
   const bounds = primaryDisplay.bounds;
@@ -65,6 +70,21 @@ app.whenReady().then(() => {
 
   ipcMain.on('quit-app', () => {
     app.quit();
+  });
+
+  ipcMain.on('set-settings-panel-open', (event, isOpen) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (isOpen) {
+        if (process.platform === 'darwin') {
+          mainWindow.setAlwaysOnTop(true, 'floating');
+        }
+        mainWindow.focus();
+      } else {
+        if (process.platform === 'darwin') {
+          mainWindow.setAlwaysOnTop(true, 'desktop', -1);
+        }
+      }
+    }
   });
 
   // Register IPC channel to configure application autostart on login dynamically
