@@ -10,9 +10,11 @@ This is a standalone, cross-platform live desktop wallpaper application built wi
 *   **Open Settings (S / Cmd+Alt+S)**: Press the **S** key on your keyboard or use the shortcut **Cmd+Alt+S** to toggle the Wallpaper Settings panel. You can also click the gear icon floating on the screen.
 *   **Interactive Feeding**: Click anywhere on the desktop to drop food. Watch the nearest fish detect the food, chase it down, and snack on it!
 *   **Settings Panel Sections**:
-    *   **Global Controls**: Adjust the global fish size, speed, and breeding limits.
-    *   **Active Fish List**: View and customize each fish currently swimming. Customize their name, size, gender, color, and toggles.
-    *   **Fish Friends (Saved Library)**: A library of saved named fish. Re-add them to the aquarium, inspect their lineage, or view their custom features.
+    *   **Ponds**: A quick presets button at the top to save, load, update, and manage your custom pond setups.
+    *   **Fish Customization**: Adjust global fish size, base population count, swimming speed, breeding capacity, default color, and schooling parameters.
+    *   **Fish**: View, name, color-pick, share, and manage individual active fish or explore the collapsible *Fish Friends* saved library.
+    *   **Pond Environment**: Customize background colors and opacities.
+    *   **System Settings**: Toggle desktop-click feeding mode, autostart at login, or quit the application.
 
 ### Managing Your Aquarium
 *   **Naming a Fish**: Type a name in the text field next to an active fish.
@@ -48,59 +50,18 @@ Every bred fish carries a digital lineage record. Click the **Lineage Icon** (ne
 
 ---
 
-## 🚀 How to Run (Development)
-
-First, make sure you have [Node.js](https://nodejs.org/) installed.
-
-1.  Navigate to this directory in your terminal:
-    ```bash
-    cd wallpaper
-    ```
-2.  Install the dependencies:
-    ```bash
-    pnpm install  # or npm install
-    ```
-3.  Start the live wallpaper:
-    ```bash
-    pnpm start    # or npm start
-    ```
-
----
-
-## 🛠️ How to Package & Share with Friends
-
-You can package this live wallpaper into a single executable (`.exe` for Windows, `.dmg` / `.app` for macOS) that you can send to your friends. They won't need to install Node.js or run any terminal commands!
-
-### Build for macOS (`.dmg`)
-Run the following command on a Mac:
-```bash
-npm run dist
-```
-This will compile a `.dmg` installer inside the `dist/` directory.
-
-### Build for Windows (`.exe`)
-Run the following command on a Windows machine:
-```bash
-npm run dist
-```
-This will compile a standalone installer `.exe` inside the `dist/` directory.
-
----
-
-## 🎨 Application Icon
-
-The application icon is dynamically generated using the exact same vector fish graphics drawing code from the application!
-To generate or rebuild the app icon:
-```bash
-npm run generate-icon
-```
-This runs a headless Electron process to render the fish canvas to `build/icon.png`, which is automatically detected and packaged by `electron-builder` during builds.
-
----
-
 ## 📜 Version History (Changelog)
 
-### **v4.1.0** (Current Version)
+### **v4.2.0** (Current Version)
+*   **Pond Presets (Ponds)**: Save, load, update, and delete custom presets of your aquarium layouts (background color, background opacity, schooling parameters, speeds, capacities, and complete properties of all active fish). Accessible via a custom glassmorphic overlay modal for high memory efficiency.
+*   **Collapsible Settings Panel**: Converted the Settings Panel sections (Fish Customization, Fish, Background Layer, and System Settings) to be collapsible and collapsed by default to keep the desktop screen clean and uncluttered.
+*   **Nested Library Collapsing**: Integrated collapsible behavior inside the Fish roster section for the inactive *Fish Friends* library list.
+*   **Integrated Schooling Settings**: Merged Schooling Behavior controls directly inside the Fish Customization section under an elegant visual divider.
+
+### **v4.1.1**
+*   **Fish Count UI Reflection**: Fixed fish count display in the settings panel to accurately reflect active fish count at all times.
+
+### **v4.1.0**
 *   **Swim Speed Control**: Added a swim speed slider in settings to adjust fish swimming speed in real time.
 *   **Dynamic Schooling Sliders**: Schooling weight sliders are now dynamically hidden when schooling behavior is disabled, keeping the settings interface clean.
 *   **Parent Size in Family Tree**: Lineage view now displays parent size details next to roles.
@@ -111,9 +72,9 @@ This runs a headless Electron process to render the fish canvas to `build/icon.p
 *   **Wall Avoidance & Feeding Fixes**: Resolved bugs preventing fish from reaching food close to walls and stopped fish from getting stuck in endless circling loops near the boundaries.
 
 ### **v4.0.0**
-*   **Size-Based Speed Scaling**: Adjusted the fish speed range dynamically according to their size. Larger fish swim faster with more power, while smaller fish (and growing babies) swim at slower, gentler speeds.
-*   **Detailed Fish Profiles on Thumbnail Click**: Click any fish thumbnail in the settings panel to open a clean card displaying its name, gender, size, date of birth (DOB), origin details, and full parentage lineage.
 *   **Fish Configuration Sharing**: Added the ability to export and import fish profiles (DNA/configurations) to easily share your custom-bred fish with friends.
+*   **Detailed Fish Profiles on Thumbnail Click**: Click any fish thumbnail in the settings panel to open a clean card displaying its name, gender, size, date of birth (DOB), origin details, and full parentage lineage.
+*   **Size-Based Speed Scaling**: Adjusted the fish speed range dynamically according to their size. Larger fish swim faster with more power, while smaller fish (and growing babies) swim at slower, gentler speeds.
 
 ### **v3.2.0**
 *   **Schooling Behavior**: Introduced realistic top-view schooling (flocking) behavior to the fish using Craig Reynolds' Boids algorithm (Cohesion, Alignment, and Separation).
@@ -135,8 +96,8 @@ This runs a headless Electron process to render the fish canvas to `build/icon.p
 
 ### **v2.1.0**
 *   **Interactive Feeding & Water Ripples**: Click anywhere on your desktop to drop food! Nearest fish will chase and eat the pellets. Moving the mouse now creates relaxing, subtle water ripples.
-*   **Enhanced Swimming Physics**: Tail and fin animations are smoother and behave like real Koi fish.
 *   **Individual Customization**: You can now rename, scale, and color-pick individual fish in real time from the Settings list.
+*   **Enhanced Swimming Physics**: Tail and fin animations are smoother and behave like real Koi fish.
 
 ### **v2.0.0**
 *   **Desktop App Packaging**: Wrapped the wallpaper simulation into an independent desktop application for Windows (`.exe`) and macOS (`.dmg`) so it can be installed and run easily.

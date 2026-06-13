@@ -197,6 +197,24 @@ function saveFishProfiles() {
   settings.fishProfiles = mergedProfiles;
   localStorage.setItem('fishy_fishProfiles', JSON.stringify(mergedProfiles));
 
+  settings.fishCount = fishes.length;
+  localStorage.setItem('fishy_fishCount', fishes.length);
+
+  const countSlider = document.getElementById("fish-count-slider");
+  const countVal = document.getElementById("fish-count-value");
+  if (countSlider) {
+    const currentMax = parseInt(countSlider.max) || 15;
+    if (fishes.length > currentMax) {
+      countSlider.max = fishes.length;
+    } else if (fishes.length < currentMax && currentMax > 15) {
+      countSlider.max = Math.max(15, fishes.length);
+    }
+    countSlider.value = fishes.length;
+  }
+  if (countVal) {
+    countVal.textContent = fishes.length;
+  }
+
   const visibleUnnamedCount = fishes.filter(fish => (!fish.name || fish.name.trim() === '') && fish.visible !== false).length;
   settings.visibleUnnamedCount = visibleUnnamedCount;
   localStorage.setItem('fishy_visibleUnnamedCount', visibleUnnamedCount);
@@ -754,6 +772,16 @@ function initSettingsUI() {
     e.stopPropagation();
   });
 
+  // Collapsible settings sections toggle
+  document.querySelectorAll(".settings-section > .settings-section-title").forEach(header => {
+    header.addEventListener("click", () => {
+      const section = header.parentElement;
+      if (section) {
+        section.classList.toggle("collapsed");
+      }
+    });
+  });
+
   // Size Slider listener — sets global default AND updates all individual fish
   sizeSlider.addEventListener("input", (e) => {
     const size = parseInt(e.target.value);
@@ -853,6 +881,15 @@ function initSettingsUI() {
       fishes.push(newFish);
       saveFishProfiles();
       renderFishList();
+    });
+  }
+
+  // Open Presets Button
+  const openPresetsBtn = document.getElementById("open-presets-btn");
+  if (openPresetsBtn) {
+    openPresetsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPresetsModal();
     });
   }
 
@@ -1744,6 +1781,267 @@ function openImportModal() {
 }
 
 // ============================================================
+// POND PRESETS SYSTEM
+// ============================================================
+
+function captureCurrentPond(name) {
+  const activeFishes = fishes.map(fish => ({
+    id: fish.id,
+    name: fish.name,
+    color: fish.colorParts || fish.color1,
+    size: fish.radius,
+    gender: fish.gender,
+    breedingEnabled: fish.breedingEnabled,
+    isBred: fish.isBred,
+    isMature: fish.isMature,
+    birthTime: fish.birthTime,
+    birthCity: fish.birthCity,
+    birthCountryCode: fish.birthCountryCode,
+    targetRadius: fish.targetRadius,
+    parentInfo: fish.parentInfo
+  }));
+
+  return {
+    id: 'preset_' + Math.random().toString(36).substr(2, 9),
+    name: name.trim(),
+    bgColor: settings.bgColor,
+    bgOpacity: settings.bgOpacity,
+    schoolingEnabled: settings.schoolingEnabled,
+    schoolingSeparation: settings.schoolingSeparation,
+    schoolingAlignment: settings.schoolingAlignment,
+    schoolingCohesion: settings.schoolingCohesion,
+    speedMultiplier: settings.speedMultiplier,
+    maxCapacity: settings.maxCapacity,
+    fishSize: settings.fishSize,
+    fishes: activeFishes
+  };
+}
+
+function loadPondPreset(preset) {
+  settings.bgColor = preset.bgColor;
+  settings.bgOpacity = preset.bgOpacity;
+  settings.speedMultiplier = preset.speedMultiplier || 1.0;
+  settings.maxCapacity = preset.maxCapacity || 10;
+  settings.schoolingEnabled = preset.schoolingEnabled !== false;
+  settings.schoolingSeparation = preset.schoolingSeparation ?? 1.2;
+  settings.schoolingAlignment = preset.schoolingAlignment ?? 1.0;
+  settings.schoolingCohesion = preset.schoolingCohesion ?? 0.8;
+  settings.fishSize = preset.fishSize || 12;
+  settings.fishCount = preset.fishes.length;
+
+  localStorage.setItem("fishy_bgColor", settings.bgColor);
+  localStorage.setItem("fishy_bgOpacity", settings.bgOpacity);
+  localStorage.setItem("fishy_speedMultiplier", settings.speedMultiplier);
+  localStorage.setItem("fishy_maxCapacity", settings.maxCapacity);
+  localStorage.setItem("fishy_schoolingEnabled", settings.schoolingEnabled);
+  localStorage.setItem("fishy_schoolingSeparation", settings.schoolingSeparation);
+  localStorage.setItem("fishy_schoolingAlignment", settings.schoolingAlignment);
+  localStorage.setItem("fishy_schoolingCohesion", settings.schoolingCohesion);
+  localStorage.setItem("fishy_fishSize", settings.fishSize);
+  localStorage.setItem("fishy_fishCount", settings.fishCount);
+
+  fishes = [];
+  preset.fishes.forEach(p => {
+    const { x, y, vx, vy } = getRandomSpawnPos(150);
+    const f = new Fish(
+      x, y, vx, vy,
+      p.size || p.radius || settings.fishSize,
+      p.color || settings.fishColor,
+      p.name || "",
+      p.visible !== false,
+      p.id || 'fish_' + Math.random().toString(36).substr(2, 9),
+      p.gender,
+      p.breedingEnabled !== false,
+      !!p.isBred,
+      p.isMature !== false,
+      p.birthTime || Date.now(),
+      p.targetRadius || p.size || p.radius || settings.fishSize,
+      p.birthCity || null,
+      p.birthCountryCode || null
+    );
+    if (p.parentInfo) f.parentInfo = p.parentInfo;
+    f.updateSpeedRange(settings.speedMultiplier);
+    fishes.push(f);
+  });
+
+  applyBackgroundSettings();
+  syncSettingsUI();
+  saveFishProfiles();
+  renderFishList();
+
+  fishes.forEach(f => {
+    ripples.push(new Ripple(f.x, f.y));
+  });
+}
+
+function openPresetsModal() {
+  const overlay = document.getElementById('presets-modal-overlay');
+  const contentEl = document.getElementById('presets-modal-content');
+  if (!overlay || !contentEl) return;
+
+  renderPresetsList(contentEl);
+  overlay.classList.add('open');
+}
+
+function renderPresetsList(contentEl) {
+  const presets = JSON.parse(localStorage.getItem('fishy_pondPresets') || '[]');
+  
+  let libraryHtml = '';
+  if (presets.length === 0) {
+    libraryHtml = `
+      <div class="modal-description" style="text-align: center; margin-top: 20px; margin-bottom: 10px; opacity: 0.6; font-size: 0.82rem;">
+        No saved presets yet. Customize your pond and save it above!
+      </div>
+    `;
+  } else {
+    libraryHtml = `
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px; max-height: 40vh; overflow-y: auto; padding-right: 4px;">
+        ${presets.map(p => {
+          // Generate small color dots representing the fish
+          const fishDots = (p.fishes || []).map(f => {
+            const bodyColor = (f.color && typeof f.color === 'object') ? (f.color.body || '#f0654e') : (f.color || '#f0654e');
+            return `<div class="preset-fish-dot" style="background-color: ${bodyColor};" title="${f.name || 'Unnamed Fish'}"></div>`;
+          }).slice(0, 8).join(''); // limit dots in UI preview to prevent overflow
+
+          const bgAlpha = Math.max(0.2, (p.bgOpacity || 50) / 100);
+          const previewBgStyle = hexToRgba(p.bgColor || '#07111e', bgAlpha);
+
+          return `
+            <div class="preset-card" id="card-${p.id}">
+              <div class="preset-info">
+                <div class="preset-bg-preview" style="background-color: ${previewBgStyle};">
+                  <div class="preset-fish-dots">
+                    ${fishDots}
+                  </div>
+                </div>
+                <div class="preset-details">
+                  <span class="preset-name">${p.name}</span>
+                  <span class="preset-meta">${(p.fishes || []).length} Fishes | Bg: ${p.bgColor} (${p.bgOpacity}%)</span>
+                </div>
+              </div>
+              <div class="preset-actions">
+                <!-- Apply / Load -->
+                <button class="preset-action-btn load-preset-btn" data-id="${p.id}" title="Apply Pond Preset">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </button>
+                <!-- Update / Overwrite -->
+                <button class="preset-action-btn update-preset-btn" data-id="${p.id}" title="Overwrite with current pond state">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                  </svg>
+                </button>
+                <!-- Delete -->
+                <button class="preset-delete-btn delete-preset-btn" data-id="${p.id}" title="Delete Preset">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  contentEl.innerHTML = `
+    <div class="modal-description" style="margin-bottom: 12px;">
+      Save the current pond configuration as a custom preset to load later.
+    </div>
+    
+    <!-- Save Preset Area -->
+    <div class="preset-save-row">
+      <div class="preset-save-input-wrapper">
+        <input type="text" id="preset-name-input" class="fish-name-input" placeholder="Preset name (e.g. Zen Brown Pond)" style="padding: 7px 10px; font-size: 0.85rem;" />
+      </div>
+      <button class="modal-primary-btn preset-save-btn" id="save-preset-btn" style="width: auto;">
+        Save Current Pond
+      </button>
+    </div>
+    
+    <div class="settings-section-title" style="margin-top: 15px; margin-bottom: 5px; font-size: 0.72rem;">Your Presets</div>
+    ${libraryHtml}
+  `;
+
+  // Save preset handler
+  const saveBtn = document.getElementById('save-preset-btn');
+  const nameInput = document.getElementById('preset-name-input');
+  if (saveBtn && nameInput) {
+    saveBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (!name) {
+        nameInput.focus();
+        nameInput.style.borderColor = '#ef4444';
+        setTimeout(() => nameInput.style.borderColor = '', 1500);
+        return;
+      }
+      const newPreset = captureCurrentPond(name);
+      presets.push(newPreset);
+      localStorage.setItem('fishy_pondPresets', JSON.stringify(presets));
+      renderPresetsList(contentEl);
+    });
+    
+    nameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        saveBtn.click();
+      }
+    });
+  }
+
+  // Action listeners
+  contentEl.querySelectorAll('.load-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const preset = presets.find(p => p.id === id);
+      if (preset) {
+        loadPondPreset(preset);
+        
+        // Success feedback
+        btn.classList.add('success-flash');
+        setTimeout(() => {
+          document.getElementById('presets-modal-overlay')?.classList.remove('open');
+        }, 300);
+      }
+    });
+  });
+
+  contentEl.querySelectorAll('.update-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const idx = presets.findIndex(p => p.id === id);
+      if (idx !== -1) {
+        const name = presets[idx].name;
+        // Overwrite preset
+        const updated = captureCurrentPond(name);
+        updated.id = id; // Keep same ID
+        presets[idx] = updated;
+        localStorage.setItem('fishy_pondPresets', JSON.stringify(presets));
+        
+        // Visual success feedback
+        btn.classList.add('success-flash');
+        setTimeout(() => {
+          renderPresetsList(contentEl);
+        }, 500);
+      }
+    });
+  });
+
+  contentEl.querySelectorAll('.delete-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const updatedPresets = presets.filter(p => p.id !== id);
+      localStorage.setItem('fishy_pondPresets', JSON.stringify(updatedPresets));
+      renderPresetsList(contentEl);
+    });
+  });
+}
+
+// ============================================================
 // ACTIVE SYSTEMS
 // ============================================================
 
@@ -2177,10 +2475,17 @@ document.getElementById('share-modal-overlay')?.addEventListener('click', (e) =>
   }
 });
 
+// Presets overlay: close on backdrop click
+document.getElementById('presets-modal-overlay')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    document.getElementById('presets-modal-overlay').classList.remove('open');
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeFamilyTree();
-    const shareOverlay = document.getElementById('share-modal-overlay');
-    if (shareOverlay) shareOverlay.classList.remove('open');
+    document.getElementById('share-modal-overlay')?.classList.remove('open');
+    document.getElementById('presets-modal-overlay')?.classList.remove('open');
   }
 });

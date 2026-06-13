@@ -117,6 +117,34 @@
         margin-bottom: 14px;
         opacity: 0.8;
       }
+      .settings-section > .settings-section-title {
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        margin-bottom: 0px;
+        transition: color 0.2s;
+      }
+      .settings-section > .settings-section-title:hover {
+        color: var(--text-main);
+      }
+      .settings-section > .settings-section-title .collapse-icon {
+        font-size: 0.7rem;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        display: inline-block;
+      }
+      .settings-section-content {
+        margin-top: 14px;
+        transition: all 0.3s ease;
+      }
+      .settings-section.collapsed .settings-section-content {
+        display: none;
+      }
+      .settings-section.collapsed > .settings-section-title .collapse-icon {
+        transform: rotate(-90deg);
+      }
       .control-group {
         margin-bottom: 18px;
       }
@@ -877,6 +905,140 @@
       .import-status.error { color: #f87171; }
       .import-status.empty { color: var(--text-muted); opacity: 0.7; }
 
+      /* ============================================================
+         POND PRESETS MODAL STYLING
+         ============================================================ */
+      .preset-card {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .preset-card:hover {
+        border-color: rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .preset-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 1;
+        min-width: 0;
+      }
+      .preset-bg-preview {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .preset-fish-dots {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        width: 32px;
+        height: 32px;
+        align-items: center;
+        justify-content: center;
+      }
+      .preset-fish-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.45);
+        border: 0.5px solid rgba(255, 255, 255, 0.2);
+      }
+      .preset-details {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .preset-name {
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .preset-meta {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+      .preset-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .preset-action-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+        border-radius: 8px;
+        transition: all 0.2s;
+      }
+      .preset-action-btn:hover {
+        color: var(--text-main);
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .preset-action-btn.active-preset {
+        color: #f0654e;
+      }
+      .preset-action-btn.success-flash {
+        color: #10b981 !important;
+        background: rgba(16, 185, 129, 0.15) !important;
+      }
+      .preset-delete-btn {
+        background: transparent;
+        border: none;
+        color: rgba(239, 68, 68, 0.65);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+        border-radius: 8px;
+        transition: all 0.2s;
+      }
+      .preset-delete-btn:hover {
+        color: rgb(239, 68, 68);
+        background: rgba(239, 68, 68, 0.15);
+      }
+      .preset-save-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .preset-save-input-wrapper {
+        flex: 1;
+        position: relative;
+      }
+      .preset-save-btn {
+        padding: 8px 16px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        border-radius: 8px;
+        height: 34px;
+        margin-top: 0;
+      }
+
     </style>
 
   </head>
@@ -895,211 +1057,236 @@
         <span>Wallpaper Settings</span>
       </div>
 
+      <!-- POND PRESETS BUTTON -->
+      <button type="button" class="add-fish-btn" id="open-presets-btn" style="margin-top: 0; margin-bottom: 20px;">
+        Ponds
+      </button>
+
       <!-- FISH CUSTOMIZATION -->
-      <div class="settings-section">
-        <div class="settings-section-title">Fish Customization</div>
-        
-        <!-- Fish Size -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Fish Size</span>
-            <span class="control-value" id="fish-size-value">12px</span>
-          </div>
-          <input type="range" id="fish-size-slider" class="range-slider" min="12" max="52" value="12" />
+      <div class="settings-section collapsed">
+        <div class="settings-section-title">
+          <span>Fish Customization</span>
+          <span class="collapse-icon">▼</span>
         </div>
+        <div class="settings-section-content">
+          <!-- Fish Size -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Fish Size</span>
+              <span class="control-value" id="fish-size-value">12px</span>
+            </div>
+            <input type="range" id="fish-size-slider" class="range-slider" min="12" max="52" value="12" />
+          </div>
 
-        <!-- Fish Count -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Fish Count</span>
-            <span class="control-value" id="fish-count-value">2</span>
+          <!-- Fish Count -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Fish Count</span>
+              <span class="control-value" id="fish-count-value">2</span>
+            </div>
+            <input type="range" id="fish-count-slider" class="range-slider" min="1" max="15" value="2" />
           </div>
-          <input type="range" id="fish-count-slider" class="range-slider" min="1" max="15" value="2" />
-        </div>
 
-        <!-- Swim Speed -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Swim Speed</span>
-            <span class="control-value" id="fish-speed-value">1.00x</span>
+          <!-- Swim Speed -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Swim Speed</span>
+              <span class="control-value" id="fish-speed-value">1.00x</span>
+            </div>
+            <input type="range" id="fish-speed-slider" class="range-slider" min="0.1" max="3" step="0.05" value="1.00" />
           </div>
-          <input type="range" id="fish-speed-slider" class="range-slider" min="0.1" max="3" step="0.05" value="1.00" />
-        </div>
 
-        <!-- Max Capacity (Breeding Limit) -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Max Capacity</span>
-            <span class="control-value" id="fish-capacity-value">10</span>
+          <!-- Max Capacity (Breeding Limit) -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Max Capacity</span>
+              <span class="control-value" id="fish-capacity-value">10</span>
+            </div>
+            <input type="range" id="fish-capacity-slider" class="range-slider" min="1" max="15" value="7" />
           </div>
-          <input type="range" id="fish-capacity-slider" class="range-slider" min="1" max="15" value="7" />
-        </div>
 
-        <!-- Fish Color Presets -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Fish Color</span>
+          <!-- Fish Color Presets -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Fish Color</span>
+            </div>
+            <div class="color-presets" id="fish-color-presets">
+              <!-- Orange (Default) -->
+              <div class="color-preset active" data-color="#f0654e" style="background-color: #f0654e;"></div>
+              <!-- Black -->
+              <div class="color-preset" data-color="#111111" style="background-color: #111111;"></div>
+              <!-- White -->
+              <div class="color-preset" data-color="#ffffff" style="background-color: #ffffff; border: 1px solid rgba(255,255,255,0.2);"></div>
+              <!-- Dark Red -->
+              <div class="color-preset" data-color="#8b0000" style="background-color: #8b0000;"></div>
+            </div>
+            <!-- Custom Color Picker -->
+            <div class="custom-color-wrapper">
+              <input type="color" id="fish-color-picker" class="custom-color-picker" value="#f0654e" />
+              <span>Custom Color</span>
+            </div>
           </div>
-          <div class="color-presets" id="fish-color-presets">
-            <!-- Orange (Default) -->
-            <div class="color-preset active" data-color="#f0654e" style="background-color: #f0654e;"></div>
-            <!-- Black -->
-            <div class="color-preset" data-color="#111111" style="background-color: #111111;"></div>
-            <!-- White -->
-            <div class="color-preset" data-color="#ffffff" style="background-color: #ffffff; border: 1px solid rgba(255,255,255,0.2);"></div>
-            <!-- Dark Red -->
-            <div class="color-preset" data-color="#8b0000" style="background-color: #8b0000;"></div>
-          </div>
-          <!-- Custom Color Picker -->
-          <div class="custom-color-wrapper">
-            <input type="color" id="fish-color-picker" class="custom-color-picker" value="#f0654e" />
-            <span>Custom Color</span>
+
+          <!-- Schooling Behavior sub-group -->
+          <div style="margin-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 16px;">
+            <div class="control-label" style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); opacity: 0.8; margin-bottom: 12px;">
+              Schooling Behavior
+            </div>
+            
+            <!-- Schooling Toggle -->
+            <div class="switch-group">
+              <span class="switch-label">Enable Schooling</span>
+              <label class="switch">
+                <input type="checkbox" id="schooling-toggle" checked />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <!-- Separation Weight Slider -->
+            <div id="schooling-sliders-container">
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Separation (Avoid Crowding)</span>
+                  <span class="control-value" id="schooling-separation-value">1.20</span>
+                </div>
+                <input type="range" id="schooling-separation-slider" class="range-slider" min="0" max="3" step="0.05" value="1.20" />
+              </div>
+
+              <!-- Alignment Weight Slider -->
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Alignment (Match Direction)</span>
+                  <span class="control-value" id="schooling-alignment-value">1.00</span>
+                </div>
+                <input type="range" id="schooling-alignment-slider" class="range-slider" min="0" max="3" step="0.05" value="1.00" />
+              </div>
+
+              <!-- Cohesion Weight Slider -->
+              <div class="control-group">
+                <div class="control-label">
+                  <span>Cohesion (Group Together)</span>
+                  <span class="control-value" id="schooling-cohesion-value">0.80</span>
+                </div>
+                <input type="range" id="schooling-cohesion-slider" class="range-slider" min="0" max="3" step="0.05" value="0.80" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- INDIVIDUAL FISH COLORS -->
-      <div class="settings-section">
-        <div class="settings-section-title">Fish</div>
-        <div id="fish-list" class="fish-list">
-          <!-- Populated dynamically by JS -->
+      <div class="settings-section collapsed">
+        <div class="settings-section-title">
+          <span>Fish</span>
+          <span class="collapse-icon">▼</span>
         </div>
-        <button type="button" class="add-fish-btn" id="add-fish-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          + Add New Fish
-        </button>
-
-        <div style="display: flex; gap: 8px; margin-top: 8px;">
-          <button type="button" class="add-fish-btn" id="import-fish-btn" style="flex: 1; margin-top: 0;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Import
-          </button>
-          <button type="button" class="add-fish-btn" id="open-folder-btn" style="flex: 1; margin-top: 0;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            Profiles Folder
-          </button>
-        </div>
-
-        
-        <!-- Saved Fish Library (Inactive Named Fish) -->
-        <div id="inactive-fish-section" style="margin-top: 20px; display: none;">
-          <div class="settings-section-title" style="font-size: 0.72rem; margin-bottom: 8px;">Fish Friends</div>
-          <div id="inactive-fish-list" class="fish-list">
+        <div class="settings-section-content">
+          <div id="fish-list" class="fish-list">
             <!-- Populated dynamically by JS -->
           </div>
-        </div>
-      </div>
+          <button type="button" class="add-fish-btn" id="add-fish-btn">
+            + Add New Fish
+          </button>
 
-      <!-- SCHOOLING BEHAVIOR -->
-      <div class="settings-section">
-        <div class="settings-section-title">Schooling Behavior</div>
-        
-        <!-- Schooling Toggle -->
-        <div class="switch-group">
-          <span class="switch-label">Enable Schooling</span>
-          <label class="switch">
-            <input type="checkbox" id="schooling-toggle" checked />
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <!-- Separation Weight Slider -->
-        <div id="schooling-sliders-container">
-          <div class="control-group">
-            <div class="control-label">
-              <span>Separation (Avoid Crowding)</span>
-              <span class="control-value" id="schooling-separation-value">1.20</span>
-            </div>
-            <input type="range" id="schooling-separation-slider" class="range-slider" min="0" max="3" step="0.05" value="1.20" />
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button type="button" class="add-fish-btn" id="import-fish-btn" style="flex: 1; margin-top: 0;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Import
+            </button>
+            <button type="button" class="add-fish-btn" id="open-folder-btn" style="flex: 1; margin-top: 0;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              Profiles Folder
+            </button>
           </div>
 
-          <!-- Alignment Weight Slider -->
-          <div class="control-group">
-            <div class="control-label">
-              <span>Alignment (Match Direction)</span>
-              <span class="control-value" id="schooling-alignment-value">1.00</span>
+          <!-- Saved Fish Library (Inactive Named Fish) -->
+          <div id="inactive-fish-section" class="settings-section collapsed" style="margin-top: 20px; display: none;">
+            <div class="settings-section-title" style="font-size: 0.72rem;">
+              <span>Fish Friends</span>
+              <span class="collapse-icon">▼</span>
             </div>
-            <input type="range" id="schooling-alignment-slider" class="range-slider" min="0" max="3" step="0.05" value="1.00" />
-          </div>
-
-          <!-- Cohesion Weight Slider -->
-          <div class="control-group">
-            <div class="control-label">
-              <span>Cohesion (Group Together)</span>
-              <span class="control-value" id="schooling-cohesion-value">0.80</span>
+            <div class="settings-section-content">
+              <div id="inactive-fish-list" class="fish-list">
+                <!-- Populated dynamically by JS -->
+              </div>
             </div>
-            <input type="range" id="schooling-cohesion-slider" class="range-slider" min="0" max="3" step="0.05" value="0.80" />
           </div>
         </div>
       </div>
+
 
       <!-- BACKGROUND CUSTOMIZATION -->
-      <div class="settings-section">
-        <div class="settings-section-title">Background Layer</div>
-
-        <!-- Opacity Slider -->
-        <div class="control-group">
-          <div class="control-label">
-            <span>Background Opacity</span>
-            <span class="control-value" id="bg-opacity-value">50%</span>
-          </div>
-          <input type="range" id="bg-opacity-slider" class="range-slider" min="0" max="100" value="50" />
+      <div class="settings-section collapsed">
+        <div class="settings-section-title">
+          <span>Pond Environment</span>
+          <span class="collapse-icon">▼</span>
         </div>
+        <div class="settings-section-content">
+          <!-- Opacity Slider -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Background Opacity</span>
+              <span class="control-value" id="bg-opacity-value">50%</span>
+            </div>
+            <input type="range" id="bg-opacity-slider" class="range-slider" min="0" max="100" value="50" />
+          </div>
 
-        <!-- Background color controls (always visible for tinting) -->
-        <div class="control-group" id="bg-color-group">
-          <div class="control-label">
-            <span>Background Color</span>
-          </div>
-          <div class="color-presets" id="bg-color-presets">
-            <!-- Ocean Dark Blue -->
-            <div class="color-preset active" data-color="#07111e" style="background-color: #07111e;"></div>
-            <!-- Elegant Charcoal -->
-            <div class="color-preset" data-color="#18181b" style="background-color: #18181b;"></div>
-            <!-- Clean White -->
-            <div class="color-preset" data-color="#ffffff" style="background-color: #ffffff; border: 1px solid rgba(0,0,0,0.15);"></div>
-            <!-- Sage Green -->
-            <div class="color-preset" data-color="#2d3732" style="background-color: #2d3732;"></div>
-          </div>
-          <div class="custom-color-wrapper">
-            <input type="color" id="bg-color-picker" class="custom-color-picker" value="#07111e" />
-            <span>Custom Color</span>
+          <!-- Background color controls (always visible for tinting) -->
+          <div class="control-group" id="bg-color-group">
+            <div class="control-label">
+              <span>Background Color</span>
+            </div>
+            <div class="color-presets" id="bg-color-presets">
+              <!-- Ocean Dark Blue -->
+              <div class="color-preset active" data-color="#07111e" style="background-color: #07111e;"></div>
+              <!-- Elegant Charcoal -->
+              <div class="color-preset" data-color="#18181b" style="background-color: #18181b;"></div>
+              <!-- Clean White -->
+              <div class="color-preset" data-color="#ffffff" style="background-color: #ffffff; border: 1px solid rgba(0,0,0,0.15);"></div>
+              <!-- Sage Green -->
+              <div class="color-preset" data-color="#2d3732" style="background-color: #2d3732;"></div>
+            </div>
+            <div class="custom-color-wrapper">
+              <input type="color" id="bg-color-picker" class="custom-color-picker" value="#07111e" />
+              <span>Custom Color</span>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- SYSTEM SETTINGS -->
-      <div class="settings-section">
-        <div class="settings-section-title">System Settings</div>
-
-        <!-- Feeding Mode Toggle -->
-        <div class="switch-group">
-          <span class="switch-label">Feeding Mode</span>
-          <label class="switch">
-            <input type="checkbox" id="feeding-mode-toggle" />
-            <span class="slider"></span>
-          </label>
+      <div class="settings-section collapsed">
+        <div class="settings-section-title">
+          <span>System Settings</span>
+          <span class="collapse-icon">▼</span>
         </div>
+        <div class="settings-section-content">
+          <!-- Feeding Mode Toggle -->
+          <div class="switch-group">
+            <span class="switch-label">Feeding Mode</span>
+            <label class="switch">
+              <input type="checkbox" id="feeding-mode-toggle" />
+              <span class="slider"></span>
+            </label>
+          </div>
 
-        <!-- Autostart Toggle -->
-        <div class="switch-group">
-          <span class="switch-label">Start at Login</span>
-          <label class="switch">
-            <input type="checkbox" id="system-autostart-toggle" checked />
-            <span class="slider"></span>
-          </label>
+          <!-- Autostart Toggle -->
+          <div class="switch-group">
+            <span class="switch-label">Start at Login</span>
+            <label class="switch">
+              <input type="checkbox" id="system-autostart-toggle" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <button type="button" class="quit-btn" id="quit-app-btn">Quit Wallpaper</button>
         </div>
-
-        <button type="button" class="quit-btn" id="quit-app-btn">Quit Wallpaper</button>
       </div>
 
       <!-- Shortcuts / Info -->
@@ -1131,6 +1318,19 @@
         </div>
         <div id="share-modal-content" class="share-modal-content">
           <!-- Dynamically populated by renderShareView or renderImportView in main.js -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Pond Presets Overlay -->
+    <div class="ft-overlay" id="presets-modal-overlay" aria-modal="true" role="dialog" aria-label="Pond Presets">
+      <div class="ft-modal" style="width: min(520px, 94vw);">
+        <div class="ft-modal-header">
+          <div class="ft-modal-title">🌊 Pond Presets</div>
+          <button class="ft-close-btn" id="presets-close-btn" title="Close" onclick="(function(){ const o=document.getElementById('presets-modal-overlay'); if(o) o.classList.remove('open'); })()">✕</button>
+        </div>
+        <div id="presets-modal-content" class="share-modal-content">
+          <!-- Dynamically populated by openPresetsModal() in main.js -->
         </div>
       </div>
     </div>
